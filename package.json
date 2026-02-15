@@ -1,0 +1,43 @@
+{
+  "name": "tasknotes-nlp-core",
+  "version": "0.1.0",
+  "description": "Shared natural language parsing core for TaskNotes",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run clean && npm run build",
+    "release:patch": "npm version patch && git push origin main --follow-tags && npm publish",
+    "release:minor": "npm version minor && git push origin main --follow-tags && npm publish",
+    "release:major": "npm version major && git push origin main --follow-tags && npm publish"
+  },
+  "keywords": [
+    "tasknotes",
+    "nlp",
+    "natural-language",
+    "tasks"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "chrono-node": "^2.7.5",
+    "date-fns": "^4.1.0",
+    "rrule": "^2.8.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

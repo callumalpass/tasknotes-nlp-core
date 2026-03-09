@@ -11,7 +11,7 @@ export const enConfig: NLPLanguageConfig = {
 
 	dateTriggers: {
 		due: ["due", "deadline", "must be done by", "by"],
-		scheduled: ["scheduled for", "start on", "begin on", "work on", "on"],
+		scheduled: ["scheduled for", "start on", "begin on", "work on", "on", "scheduled", "start"],
 	},
 
 	recurrence: {

@@ -1,4 +1,4 @@
-import type { NLPTriggersConfig } from "./types";
+import type { NLPTriggersConfig } from "./types.js";
 
 export const DEFAULT_NLP_TRIGGERS: NLPTriggersConfig = {
   triggers: [

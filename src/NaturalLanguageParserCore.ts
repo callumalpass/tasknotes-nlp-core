@@ -1,10 +1,16 @@
 import { format, isValid } from "date-fns";
-import { StatusConfig, PriorityConfig, NLPTriggersConfig, UserMappedField } from "./types";
+import type { StatusConfig, PriorityConfig, NLPTriggersConfig, UserMappedField } from "./types.js";
 import * as chrono from "chrono-node";
-import { RRule } from "rrule";
-import { getLanguageConfig, NLPLanguageConfig } from "./languages";
-import { TriggerConfigService } from "./TriggerConfigService";
-import { DEFAULT_NLP_TRIGGERS } from "./defaults";
+import * as rruleModule from "rrule";
+import { getLanguageConfig, type NLPLanguageConfig } from "./languages/index.js";
+import { TriggerConfigService } from "./TriggerConfigService.js";
+import { DEFAULT_NLP_TRIGGERS } from "./defaults.js";
+
+type RRuleModule = typeof import("rrule");
+const RRule = (
+	rruleModule.RRule ??
+	(rruleModule as RRuleModule & { default?: RRuleModule }).default?.RRule
+) as RRuleModule["RRule"];
 
 export interface ParsedTaskData {
 	title: string;

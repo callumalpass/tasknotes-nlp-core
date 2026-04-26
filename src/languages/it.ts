@@ -1,4 +1,4 @@
-import { NLPLanguageConfig } from "./types";
+import type { NLPLanguageConfig } from "./types.js";
 
 /**
  * Italian language configuration for Natural Language Processing

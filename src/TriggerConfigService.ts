@@ -1,4 +1,4 @@
-import { PropertyTriggerConfig, NLPTriggersConfig, UserMappedField } from "./types";
+import type { PropertyTriggerConfig, NLPTriggersConfig, UserMappedField } from "./types.js";
 
 /**
  * Service for managing and querying NLP trigger configurations

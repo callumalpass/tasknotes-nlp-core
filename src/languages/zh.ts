@@ -76,7 +76,7 @@ export const zhConfig: NLPLanguageConfig = {
 
 	fallbackPriority: {
 		urgent: ["紧急", "急迫", "立即", "马上"],
-		high: ["高", "重要", "优先", "高优先级"],
+		high: ["高", "重要", "高优先级"],
 		normal: ["正常", "普通", "中等", "标准"],
 		low: ["低", "不重要", "低优先级", "次要"],
 	},

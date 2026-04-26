@@ -688,17 +688,16 @@ export class NaturalLanguageParserCore {
 							}
 						}
 
-						// Remove the entire matched expression (trigger + date) from working text
-						const dateStart =
-							match.endIndex +
-							(chronoParsed.startIndex !== undefined ? chronoParsed.startIndex : 0);
+						// Remove the entire matched expression (trigger + connector text + date).
+						const remainingDateOffset = this.getChronoMatchOffset(
+							remainingText,
+							chronoParsed
+						);
 						const dateEnd = chronoParsed.matchedText
-							? dateStart + chronoParsed.matchedText.length
+							? match.endIndex + remainingDateOffset + chronoParsed.matchedText.length
 							: match.endIndex;
 						workingText =
-							workingText.substring(0, match.startIndex) +
-							workingText.substring(match.endIndex, dateStart) +
-							workingText.substring(dateEnd);
+							workingText.substring(0, match.startIndex) + workingText.substring(dateEnd);
 						workingText = this.cleanupWhitespace(workingText);
 						// Continue processing to find additional triggers (Issue #1421)
 					}
@@ -820,6 +819,23 @@ export class NaturalLanguageParserCore {
 		}
 
 		return { success: false };
+	}
+
+	private getChronoMatchOffset(
+		text: string,
+		chronoParsed: { matchedText?: string; startIndex?: number }
+	): number {
+		const reportedStart = chronoParsed.startIndex ?? 0;
+		if (!chronoParsed.matchedText) {
+			return reportedStart;
+		}
+
+		const actualStart = text.indexOf(chronoParsed.matchedText);
+		if (actualStart !== -1) {
+			return actualStart;
+		}
+
+		return reportedStart;
 	}
 
 	/**

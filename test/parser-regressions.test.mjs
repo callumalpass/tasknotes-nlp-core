@@ -11,6 +11,14 @@ const createParser = (options = {}) =>
 	);
 
 describe("date trigger phrase matching", () => {
+	it("removes explicit date triggers and their connecting text from titles", () => {
+		for (const input of ["Task due 2026-05-13", "Task scheduled for 2026-05-13"]) {
+			const result = createParser().parseInput(input);
+
+			assert.equal(result.title, "Task");
+		}
+	});
+
 	it("parses standalone scheduled and start triggers without losing due dates", () => {
 		for (const input of [
 			"Scheduled 2026-05-01 Due 2026-05-13",
@@ -101,6 +109,24 @@ describe("custom status and priority phrase matching", () => {
 
 		assert.equal(parser.parseInput("redone file taxes").status, undefined);
 		assert.equal(parser.parseInput("highlight file taxes").priority, undefined);
+	});
+});
+
+describe("CJK priority phrase matching", () => {
+	it("does not treat the Japanese word for priority as high priority inside a title", () => {
+		const parser = createParser({ language: "ja" });
+		const result = parser.parseInput("タスク 優先度 高");
+
+		assert.equal(result.priority, "high");
+		assert.equal(result.title, "タスク 優先度");
+	});
+
+	it("does not treat the Chinese word for priority as high priority inside a title", () => {
+		const parser = createParser({ language: "zh" });
+		const result = parser.parseInput("任务 优先级 高");
+
+		assert.equal(result.priority, "high");
+		assert.equal(result.title, "任务 优先级");
 	});
 });
 

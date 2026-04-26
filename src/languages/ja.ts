@@ -76,7 +76,7 @@ export const jaConfig: NLPLanguageConfig = {
 
 	fallbackPriority: {
 		urgent: ["緊急", "至急", "急務", "最優先", "すぐに"],
-		high: ["高", "重要", "優先", "高優先度", "重点"],
+		high: ["高", "重要", "高優先度", "重点"],
 		normal: ["普通", "通常", "標準", "一般", "ノーマル"],
 		low: ["低", "軽微", "後回し", "低優先度", "余裕"],
 	},

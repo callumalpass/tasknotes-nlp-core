@@ -1,16 +1,16 @@
-import { LanguageRegistry, NLPLanguageConfig } from "./types";
-import { enConfig } from "./en";
-import { esConfig } from "./es";
-import { frConfig } from "./fr";
-import { deConfig } from "./de";
-import { ruConfig } from "./ru";
-import { zhConfig } from "./zh";
-import { jaConfig } from "./ja";
-import { itConfig } from "./it";
-import { nlConfig } from "./nl";
-import { ptConfig } from "./pt";
-import { svConfig } from "./sv";
-import { ukConfig } from "./uk";
+import type { LanguageRegistry, NLPLanguageConfig } from "./types.js";
+import { enConfig } from "./en.js";
+import { esConfig } from "./es.js";
+import { frConfig } from "./fr.js";
+import { deConfig } from "./de.js";
+import { ruConfig } from "./ru.js";
+import { zhConfig } from "./zh.js";
+import { jaConfig } from "./ja.js";
+import { itConfig } from "./it.js";
+import { nlConfig } from "./nl.js";
+import { ptConfig } from "./pt.js";
+import { svConfig } from "./sv.js";
+import { ukConfig } from "./uk.js";
 
 /**
  * Registry of all available language configurations
@@ -60,4 +60,4 @@ export function detectSystemLanguage(): string {
 }
 
 // Re-export types for convenience
-export * from "./types";
+export * from "./types.js";

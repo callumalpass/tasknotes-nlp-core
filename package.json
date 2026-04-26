@@ -25,6 +25,7 @@
     "build:esm": "tsc -p tsconfig.json",
     "build:cjs": "tsc -p tsconfig.cjs.json && node scripts/write-cjs-package.mjs",
     "clean": "rm -rf dist dist-cjs",
+    "test": "npm run build && node --test test/*.test.mjs",
     "prepare": "npm run build",
     "prepublishOnly": "npm run clean && npm run build",
     "release:patch": "npm version patch && git push origin main --follow-tags && npm publish",

@@ -11,7 +11,7 @@ export const deConfig: NLPLanguageConfig = {
 
 	dateTriggers: {
 		due: ["fällig", "termin", "abgabe", "deadline", "bis zum", "bis"],
-		scheduled: ["geplant für", "geplant am", "beginnen am", "anfangen am", "arbeiten an", "am"],
+		scheduled: ["geplant für", "geplant am", "beginnen am", "anfangen am", "arbeiten an", "am", "geplant", "starten"],
 	},
 
 	recurrence: {

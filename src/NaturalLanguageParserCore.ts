@@ -30,11 +30,6 @@ export interface ParsedTaskData {
 	userFields?: Record<string, string | string[]>; // Custom user-defined fields
 }
 
-interface RegexPattern {
-	regex: RegExp;
-	value: string;
-}
-
 /**
  * Pipeline processor for modular parsing stages
  */
@@ -54,9 +49,14 @@ interface BoundaryConfig {
 	isNonAscii: boolean;
 }
 
+interface PhraseMatch {
+	fullMatch: string;
+	phrase: string;
+	startIndex: number;
+	endIndex: number;
+}
+
 export class NaturalLanguageParserCore {
-	private readonly statusPatterns: RegexPattern[];
-	private readonly priorityPatterns: RegexPattern[];
 	private readonly recurrencePatterns: Array<{
 		regex: RegExp;
 		handler: (match: RegExpMatchArray) => string;
@@ -92,9 +92,7 @@ export class NaturalLanguageParserCore {
 		// Create boundary configuration once for all pattern building
 		this.boundaries = this.createBoundaryConfig();
 
-		// Pre-compile regex patterns for performance
-		this.priorityPatterns = this.buildPriorityPatterns(priorityConfigs);
-		this.statusPatterns = this.buildFallbackStatusPatterns();
+		// Pre-compile recurrence patterns for performance
 		this.recurrencePatterns = this.buildRecurrencePatterns();
 
 		// Initialize the processing pipeline
@@ -380,66 +378,7 @@ export class NaturalLanguageParserCore {
 		return workingText;
 	}
 
-	/**
-	 * Pre-builds priority regex patterns from configuration for efficiency.
-	 * Creates patterns for both custom priority configs and language fallbacks.
-	 *
-	 * @param configs Custom priority configurations
-	 * @returns Array of compiled regex patterns with their corresponding priority values
-	 */
-	private buildPriorityPatterns(configs: PriorityConfig[]): RegexPattern[] {
-		if (configs.length > 0) {
-			return configs.flatMap((config) => [
-				{
-					regex: new RegExp(`\\b${this.escapeRegex(config.value)}\\b`, "i"),
-					value: config.value,
-				},
-				{
-					regex: new RegExp(`\\b${this.escapeRegex(config.label)}\\b`, "i"),
-					value: config.value,
-				},
-			]);
-		}
-		// Fallback patterns from language config - order matters, most specific first
-		const patterns: RegexPattern[] = [];
-		const langConfig = this.languageConfig.fallbackPriority;
-
-		// Build regex patterns from language config with proper escaping and boundary handling
-		const { boundary, endBoundary } = this.boundaries;
-
-		patterns.push({
-			regex: new RegExp(
-				`${boundary}(${langConfig.urgent.map((p) => this.escapeRegex(p)).join("|")})${endBoundary}`,
-				"i"
-			),
-			value: "urgent",
-		});
-		patterns.push({
-			regex: new RegExp(
-				`${boundary}(${langConfig.high.map((p) => this.escapeRegex(p)).join("|")})${endBoundary}`,
-				"i"
-			),
-			value: "high",
-		});
-		patterns.push({
-			regex: new RegExp(
-				`${boundary}(${langConfig.normal.map((p) => this.escapeRegex(p)).join("|")})${endBoundary}`,
-				"i"
-			),
-			value: "normal",
-		});
-		patterns.push({
-			regex: new RegExp(
-				`${boundary}(${langConfig.low.map((p) => this.escapeRegex(p)).join("|")})${endBoundary}`,
-				"i"
-			),
-			value: "low",
-		});
-
-		return patterns;
-	}
-
-	/** Extracts priority using string-based matching for custom priorities and regex for fallbacks. */
+	/** Extracts priority using shared phrase matching for custom and fallback priorities. */
 	private extractPriority(text: string, result: ParsedTaskData): string {
 		if (this.priorityConfigs.length > 0) {
 			const sortedConfigs = [...this.priorityConfigs].sort(
@@ -476,88 +415,23 @@ export class NaturalLanguageParserCore {
 			return text;
 		}
 
-		// Fallback to regex patterns (for default language priorities)
-		let foundMatch: { pattern: RegexPattern; index: number } | null = null;
+		const langConfig = this.languageConfig.fallbackPriority;
+		const match = this.findPhraseValueMatch(text, [
+			{ value: "urgent", phrases: langConfig.urgent },
+			{ value: "high", phrases: langConfig.high },
+			{ value: "normal", phrases: langConfig.normal },
+			{ value: "low", phrases: langConfig.low },
+		]);
 
-		for (const pattern of this.priorityPatterns) {
-			const match = text.match(pattern.regex);
-			if (match && match.index !== undefined) {
-				if (!foundMatch || match.index < foundMatch.index) {
-					foundMatch = { pattern, index: match.index };
-				}
-			}
-		}
-
-		if (foundMatch) {
-			result.priority = foundMatch.pattern.value;
-			return this.cleanupWhitespace(text.replace(foundMatch.pattern.regex, ""));
+		if (match) {
+			result.priority = match.value;
+			return this.removePhraseMatch(text, match.match);
 		}
 
 		return text;
 	}
 
-	/**
-	 * Pre-builds fallback status regex patterns using language config.
-	 * Only used when no user status configurations are provided.
-	 * Uses appropriate word boundaries for different language types (ASCII vs non-ASCII).
-	 *
-	 * Pattern examples:
-	 * - English: \b(done|completed|finished)\b
-	 * - French: (?:^|\s)(terminé|fini|accompli)(?=\s|$)
-	 *
-	 * @returns Array of compiled status regex patterns
-	 */
-	private buildFallbackStatusPatterns(): RegexPattern[] {
-		// Only build fallback patterns if no user status configs are provided
-		if (this.statusConfigs.length > 0) {
-			return [];
-		}
-
-		const langConfig = this.languageConfig.fallbackStatus;
-
-		// Use pre-configured boundary matching
-		const { boundary, endBoundary } = this.boundaries;
-
-		return [
-			{
-				regex: new RegExp(
-					`${boundary}(${langConfig.open.map((p) => this.escapeRegex(p)).join("|")})${endBoundary}`,
-					"i"
-				),
-				value: "open",
-			},
-			{
-				regex: new RegExp(
-					`${boundary}(${langConfig.inProgress.map((p) => this.escapeRegex(p)).join("|")})${endBoundary}`,
-					"i"
-				),
-				value: "in-progress",
-			},
-			{
-				regex: new RegExp(
-					`${boundary}(${langConfig.done.map((p) => this.escapeRegex(p)).join("|")})${endBoundary}`,
-					"i"
-				),
-				value: "done",
-			},
-			{
-				regex: new RegExp(
-					`${boundary}(${langConfig.cancelled.map((p) => this.escapeRegex(p)).join("|")})${endBoundary}`,
-					"i"
-				),
-				value: "cancelled",
-			},
-			{
-				regex: new RegExp(
-					`${boundary}(${langConfig.waiting.map((p) => this.escapeRegex(p)).join("|")})${endBoundary}`,
-					"i"
-				),
-				value: "waiting",
-			},
-		];
-	}
-
-	/** Extracts status using string-based matching for custom statuses and regex for fallbacks. */
+	/** Extracts status using shared phrase matching for custom and fallback statuses. */
 	private extractStatus(text: string, result: ParsedTaskData): string {
 		// If user has defined custom status configs, only use those
 		if (this.statusConfigs.length > 0) {
@@ -602,12 +476,18 @@ export class NaturalLanguageParserCore {
 			return text;
 		}
 
-		// Only use fallback regex patterns when no user status configs are provided
-		for (const pattern of this.statusPatterns) {
-			if (pattern.regex.test(text)) {
-				result.status = pattern.value;
-				return this.cleanupWhitespace(text.replace(pattern.regex, ""));
-			}
+		const langConfig = this.languageConfig.fallbackStatus;
+		const match = this.findPhraseValueMatch(text, [
+			{ value: "open", phrases: langConfig.open },
+			{ value: "in-progress", phrases: langConfig.inProgress },
+			{ value: "done", phrases: langConfig.done },
+			{ value: "cancelled", phrases: langConfig.cancelled },
+			{ value: "waiting", phrases: langConfig.waiting },
+		]);
+
+		if (match) {
+			result.status = match.value;
+			return this.removePhraseMatch(text, match.match);
 		}
 
 		return text;
@@ -621,40 +501,128 @@ export class NaturalLanguageParserCore {
 		text: string,
 		searchText: string
 	): { fullMatch: string; startIndex: number } | null {
-		// Guard against empty status text to prevent infinite loop
-		if (!searchText || searchText.trim() === "") {
+		const match = this.findPhraseMatch(text, [searchText]);
+		if (!match) {
+			return null;
+		}
+
+		const fullMatchEndIndex = this.includeTrailingPhraseSeparator(text, match.endIndex);
+		return {
+			fullMatch: text.substring(match.startIndex, fullMatchEndIndex),
+			startIndex: match.startIndex,
+		};
+	}
+
+	/**
+	 * Finds the earliest whole-phrase match, preferring the longest phrase at the same position.
+	 */
+	private findPhraseMatch(text: string, phrases: string[]): PhraseMatch | null {
+		const searchablePhrases = phrases
+			.filter((phrase) => phrase && phrase.trim() !== "")
+			.sort((a, b) => b.length - a.length);
+		if (searchablePhrases.length === 0) {
 			return null;
 		}
 
 		const lowerText = text.toLowerCase();
-		const lowerStatus = searchText.toLowerCase();
+		let bestMatch: PhraseMatch | null = null;
 
-		let searchIndex = 0;
-		// eslint-disable-next-line no-constant-condition
-		while (true) {
-			const index = lowerText.indexOf(lowerStatus, searchIndex);
-			if (index === -1) break;
+		for (const phrase of searchablePhrases) {
+			const lowerPhrase = phrase.toLowerCase();
+			let searchIndex = 0;
 
-			// Check if this is a valid word boundary match
-			const beforeChar = index > 0 ? text[index - 1] : " ";
-			const afterIndex = index + searchText.length;
-			const afterChar = afterIndex < text.length ? text[afterIndex] : " ";
+			while (searchIndex <= lowerText.length) {
+				const index = lowerText.indexOf(lowerPhrase, searchIndex);
+				if (index === -1) {
+					break;
+				}
 
-			// Valid if surrounded by whitespace or string boundaries
-			const isValidBefore = /\s/.test(beforeChar) || index === 0;
-			const isValidAfter = /\s/.test(afterChar) || afterIndex === text.length;
+				const endIndex = index + phrase.length;
+				if (this.hasPhraseBoundaries(text, index, endIndex)) {
+					const candidate: PhraseMatch = {
+						fullMatch: text.substring(index, endIndex),
+						phrase,
+						startIndex: index,
+						endIndex,
+					};
 
-			if (isValidBefore && isValidAfter) {
-				return {
-					fullMatch: text.substring(index, afterIndex),
-					startIndex: index,
-				};
+					if (
+						!bestMatch ||
+						candidate.startIndex < bestMatch.startIndex ||
+						(candidate.startIndex === bestMatch.startIndex &&
+							candidate.phrase.length > bestMatch.phrase.length)
+					) {
+						bestMatch = candidate;
+					}
+				}
+
+				searchIndex = index + 1;
 			}
-
-			searchIndex = index + 1;
 		}
 
-		return null;
+		return bestMatch;
+	}
+
+	private findPhraseValueMatch(
+		text: string,
+		groups: Array<{ value: string; phrases: string[] }>
+	): { value: string; match: PhraseMatch } | null {
+		let bestMatch: { value: string; match: PhraseMatch } | null = null;
+
+		for (const group of groups) {
+			const match = this.findPhraseMatch(text, group.phrases);
+			if (
+				match &&
+				(!bestMatch ||
+					match.startIndex < bestMatch.match.startIndex ||
+					(match.startIndex === bestMatch.match.startIndex &&
+						match.phrase.length > bestMatch.match.phrase.length))
+			) {
+				bestMatch = { value: group.value, match };
+			}
+		}
+
+		return bestMatch;
+	}
+
+	private removePhraseMatch(text: string, match: PhraseMatch): string {
+		const endIndex = this.includeTrailingPhraseSeparator(text, match.endIndex);
+		return this.cleanupWhitespace(text.substring(0, match.startIndex) + text.substring(endIndex));
+	}
+
+	private hasPhraseBoundaries(text: string, startIndex: number, endIndex: number): boolean {
+		if (["zh", "ja"].includes(this.languageConfig.code)) {
+			return true;
+		}
+
+		const beforeChar = this.getCodePointBefore(text, startIndex);
+		const afterChar = this.getCodePointAt(text, endIndex);
+
+		return !this.isWordCharacter(beforeChar) && !this.isWordCharacter(afterChar);
+	}
+
+	private getCodePointBefore(text: string, index: number): string {
+		if (index <= 0) {
+			return "";
+		}
+
+		return Array.from(text.slice(0, index)).pop() || "";
+	}
+
+	private getCodePointAt(text: string, index: number): string {
+		if (index >= text.length) {
+			return "";
+		}
+
+		return Array.from(text.slice(index))[0] || "";
+	}
+
+	private isWordCharacter(char: string): boolean {
+		return char !== "" && /[\p{L}\p{N}\p{M}_]/u.test(char);
+	}
+
+	private includeTrailingPhraseSeparator(text: string, endIndex: number): number {
+		return /[:,;]/.test(text[endIndex] || "") ? endIndex + 1 : endIndex;
 	}
 
 	/**
@@ -682,32 +650,25 @@ export class NaturalLanguageParserCore {
 			const chronoParser = this.getChronoParser();
 			const langTriggers = this.languageConfig.dateTriggers;
 
-			// First, try to find explicit trigger patterns
-			const triggerPatterns = [
+			// First, try to find explicit trigger phrases.
+			const triggerPatterns: Array<{ type: "due" | "scheduled"; phrases: string[] }> = [
 				{
 					type: "due",
-					regex: new RegExp(
-						`\\b(${langTriggers.due.map((t) => this.escapeRegex(t)).join("|")})`,
-						"i"
-					),
+					phrases: langTriggers.due,
 				},
 				{
 					type: "scheduled",
-					regex: new RegExp(
-						`\\b(${langTriggers.scheduled.map((t) => this.escapeRegex(t)).join("|")})`,
-						"i"
-					),
+					phrases: langTriggers.scheduled,
 				},
 			];
 
 			// Check for explicit triggers - process all triggers, not just the first one
 			let foundExplicitTrigger = false;
 			for (const triggerPattern of triggerPatterns) {
-				const match = workingText.match(triggerPattern.regex);
+				const match = this.findPhraseMatch(workingText, triggerPattern.phrases);
 				if (match) {
 					// Get the position where the date text starts (after the trigger)
-					const triggerEnd = (match.index || 0) + match[0].length;
-					const remainingText = workingText.substring(triggerEnd);
+					const remainingText = workingText.substring(match.endIndex);
 
 					// Use chrono-node to parse from this position onward
 					const chronoParsed = this.parseChronoFromPosition(remainingText);
@@ -728,10 +689,16 @@ export class NaturalLanguageParserCore {
 						}
 
 						// Remove the entire matched expression (trigger + date) from working text
-						workingText = workingText.replace(triggerPattern.regex, "");
-						if (chronoParsed.matchedText) {
-							workingText = workingText.replace(chronoParsed.matchedText, "");
-						}
+						const dateStart =
+							match.endIndex +
+							(chronoParsed.startIndex !== undefined ? chronoParsed.startIndex : 0);
+						const dateEnd = chronoParsed.matchedText
+							? dateStart + chronoParsed.matchedText.length
+							: match.endIndex;
+						workingText =
+							workingText.substring(0, match.startIndex) +
+							workingText.substring(match.endIndex, dateStart) +
+							workingText.substring(dateEnd);
 						workingText = this.cleanupWhitespace(workingText);
 						// Continue processing to find additional triggers (Issue #1421)
 					}
@@ -755,18 +722,8 @@ export class NaturalLanguageParserCore {
 			const startDate = primaryMatch.start.date();
 			const endDate = primaryMatch.end?.date();
 
-			// Create internationalized patterns for context detection
-			const dueKeywordPattern = new RegExp(
-				`\\b(${langTriggers.due.map((t) => this.escapeRegex(t)).join("|")})\\b`,
-				"i"
-			);
-			const scheduledKeywordPattern = new RegExp(
-				`\\b(${langTriggers.scheduled.map((t) => this.escapeRegex(t)).join("|")})\\b`,
-				"i"
-			);
-
-			let isDue = dueKeywordPattern.test(primaryMatch.text);
-			let isScheduled = scheduledKeywordPattern.test(primaryMatch.text);
+			let isDue = this.findPhraseMatch(primaryMatch.text, langTriggers.due) !== null;
+			let isScheduled = this.findPhraseMatch(primaryMatch.text, langTriggers.scheduled) !== null;
 
 			// Handle date ranges (e.g., "from tomorrow to next friday")
 			if (endDate && isValid(endDate) && endDate.getTime() !== startDate.getTime()) {
@@ -827,6 +784,7 @@ export class NaturalLanguageParserCore {
 		date?: string;
 		time?: string;
 		matchedText?: string;
+		startIndex?: number;
 	} {
 		try {
 			// Parse the text starting from the beginning using locale-specific parser
@@ -845,6 +803,7 @@ export class NaturalLanguageParserCore {
 							success: true,
 							date: format(parsedDate, "yyyy-MM-dd"),
 							matchedText: firstMatch.text,
+							startIndex: firstMatch.index,
 						};
 
 						// Check if time is included and certain

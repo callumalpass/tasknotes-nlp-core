@@ -6,11 +6,7 @@ import { getLanguageConfig, type NLPLanguageConfig } from "./languages/index.js"
 import { TriggerConfigService } from "./TriggerConfigService.js";
 import { DEFAULT_NLP_TRIGGERS } from "./defaults.js";
 
-type RRuleModule = typeof import("rrule");
-const RRule = (
-	rruleModule.RRule ??
-	(rruleModule as RRuleModule & { default?: RRuleModule }).default?.RRule
-) as RRuleModule["RRule"];
+const RRule = rruleModule.RRule;
 
 export interface ParsedTaskData {
 	title: string;
@@ -28,6 +24,21 @@ export interface ParsedTaskData {
 	estimate?: number; // in minutes
 	isCompleted?: boolean;
 	userFields?: Record<string, string | string[]>; // Custom user-defined fields
+}
+
+export type NumericDateOrder = "day-first" | "month-first";
+
+export interface NaturalLanguageParserOptions {
+	/**
+	 * Locale used for ambiguous numeric dates such as 11/06/2026.
+	 * This is intentionally separate from languageCode so English parsing can still
+	 * respect regional date order such as en-GB.
+	 */
+	dateLocale?: string;
+	/**
+	 * Explicit numeric date order override. When omitted, dateLocale is used.
+	 */
+	dateOrder?: NumericDateOrder;
 }
 
 /**
@@ -68,6 +79,7 @@ export class NaturalLanguageParserCore {
 	private readonly processingPipeline: ParseProcessor[];
 	private readonly boundaries: BoundaryConfig;
 	private readonly triggerConfig: TriggerConfigService;
+	private readonly options: NaturalLanguageParserOptions;
 
 	constructor(
 		statusConfigs: StatusConfig[] = [],
@@ -75,10 +87,12 @@ export class NaturalLanguageParserCore {
 		defaultToScheduled = true,
 		languageCode = "en",
 		nlpTriggers?: NLPTriggersConfig,
-		userFields?: UserMappedField[]
+		userFields?: UserMappedField[],
+		options: NaturalLanguageParserOptions = {}
 	) {
 		this.defaultToScheduled = defaultToScheduled;
 		this.languageConfig = getLanguageConfig(languageCode);
+		this.options = options;
 
 		// Store status configs for string-based matching
 		this.statusConfigs = statusConfigs;
@@ -185,7 +199,9 @@ export class NaturalLanguageParserCore {
 		};
 
 		// 1. Separate title line from details
-		const [workingText, details] = this.extractTitleAndDetails(input);
+		const protectedInput = this.protectNlpLiterals(input);
+		const normalizedInput = this.normalizeNumericDateLiterals(protectedInput.text);
+		const [workingText, details] = this.extractTitleAndDetails(normalizedInput);
 		if (details) {
 			result.details = details;
 		}
@@ -206,7 +222,250 @@ export class NaturalLanguageParserCore {
 		result.title = remainingText.trim();
 
 		// 4. Validate and finalize the result
-		return this.validateAndCleanupResult(result);
+		const finalized = this.validateAndCleanupResult(result);
+		this.restoreProtectedLiterals(finalized, protectedInput.literals);
+		return finalized;
+	}
+
+	private protectNlpLiterals(input: string): { text: string; literals: string[] } {
+		const quoted = this.protectQuotedLiterals(input);
+		return this.protectEscapedLiterals(quoted.text, quoted.literals);
+	}
+
+	private protectQuotedLiterals(input: string): { text: string; literals: string[] } {
+		const literals: string[] = [];
+		let text = "";
+		let index = 0;
+
+		while (index < input.length) {
+			const char = input[index];
+			if (!this.isQuoteDelimiter(char) || !this.isEligibleQuoteStart(input, index)) {
+				text += char;
+				index += 1;
+				continue;
+			}
+
+			const endIndex = this.findClosingQuote(input, index + 1, char);
+			if (endIndex === -1 || !this.isEligibleQuoteEnd(input, endIndex)) {
+				text += char;
+				index += 1;
+				continue;
+			}
+
+			const literal = input.slice(index + 1, endIndex);
+			if (literal.trim().length === 0) {
+				text += char;
+				index += 1;
+				continue;
+			}
+
+			const placeholder = `__TASKNOTES_NLP_LITERAL_${literals.length}__`;
+			literals.push(literal);
+			text += placeholder;
+			index = endIndex + 1;
+		}
+
+		return { text, literals };
+	}
+
+	private protectEscapedLiterals(
+		input: string,
+		literals: string[]
+	): { text: string; literals: string[] } {
+		let text = "";
+		let index = 0;
+
+		while (index < input.length) {
+			if (input[index] !== "\\") {
+				text += input[index];
+				index += 1;
+				continue;
+			}
+
+			const literalStart = index + 1;
+			if (
+				literalStart >= input.length ||
+				!this.shouldProtectEscapedLiteral(input, index, literalStart)
+			) {
+				text += input[index];
+				index += 1;
+				continue;
+			}
+
+			let literalEnd = literalStart;
+			while (literalEnd < input.length && !/\s/u.test(input[literalEnd])) {
+				literalEnd += 1;
+			}
+
+			const literal = input.slice(literalStart, literalEnd);
+			const placeholder = `__TASKNOTES_NLP_LITERAL_${literals.length}__`;
+			literals.push(literal);
+			text += placeholder;
+			index = literalEnd;
+		}
+
+		return { text, literals };
+	}
+
+	private restoreProtectedLiterals(parsed: ParsedTaskData, literals: string[]): void {
+		if (literals.length === 0) return;
+
+		parsed.title = this.restoreProtectedLiteralsInText(parsed.title, literals)
+			.replace(/\s+/g, " ")
+			.trim();
+		if (parsed.details) {
+			parsed.details = this.restoreProtectedLiteralsInText(parsed.details, literals);
+		}
+		if (parsed.userFields) {
+			for (const [key, value] of Object.entries(parsed.userFields)) {
+				if (typeof value === "string") {
+					parsed.userFields[key] = this.restoreProtectedLiteralsInText(value, literals);
+				} else {
+					parsed.userFields[key] = value.map((item) =>
+						this.restoreProtectedLiteralsInText(item, literals)
+					);
+				}
+			}
+		}
+	}
+
+	private restoreProtectedLiteralsInText(text: string, literals: string[]): string {
+		let restored = text;
+		literals.forEach((literal, index) => {
+			restored = restored.replace(`__TASKNOTES_NLP_LITERAL_${index}__`, literal);
+		});
+		return restored;
+	}
+
+	private isQuoteDelimiter(char: string): boolean {
+		return char === "\"" || char === "'" || char === "`";
+	}
+
+	private isEligibleQuoteStart(input: string, index: number): boolean {
+		const char = input[index];
+		if (char !== "'") return true;
+
+		const previous = index > 0 ? input[index - 1] : "";
+		return !this.isWordCharacter(previous);
+	}
+
+	private isEligibleQuoteEnd(input: string, index: number): boolean {
+		const char = input[index];
+		if (char !== "'") return true;
+
+		const next = index + 1 < input.length ? input[index + 1] : "";
+		return !this.isWordCharacter(next);
+	}
+
+	private findClosingQuote(input: string, startIndex: number, delimiter: string): number {
+		for (let index = startIndex; index < input.length; index += 1) {
+			if (input[index] !== delimiter) continue;
+
+			const previous = index > 0 ? input[index - 1] : "";
+			if (previous === "\\") continue;
+
+			return index;
+		}
+
+		return -1;
+	}
+
+	private shouldProtectEscapedLiteral(
+		input: string,
+		escapeIndex: number,
+		literalStart: number
+	): boolean {
+		if (this.startsWithEscapableTrigger(input, literalStart)) {
+			return true;
+		}
+
+		const previous = escapeIndex > 0 ? input[escapeIndex - 1] : "";
+		if (previous && !/\s/u.test(previous)) {
+			return false;
+		}
+
+		return /[\p{L}\p{N}]/u.test(input[literalStart]);
+	}
+
+	private startsWithEscapableTrigger(input: string, index: number): boolean {
+		return this.getEscapableTriggers().some((trigger) => input.startsWith(trigger, index));
+	}
+
+	private getEscapableTriggers(): string[] {
+		const configured = this.triggerConfig
+			.getTriggersOrderedByLength()
+			.map((trigger) => trigger.trigger)
+			.filter((trigger) => trigger.length > 0);
+
+		return configured.length > 0 ? configured : ["#", "@", "+", "*", "!"];
+	}
+
+	private normalizeNumericDateLiterals(input: string): string {
+		const withYearFirstDates = input.replace(
+			/(^|[^\p{L}\p{N}_])(\d{4})[/.](\d{1,2})[/.](\d{1,2})(?=$|[^\p{L}\p{N}_])/gu,
+			(match, prefix: string, yearText: string, monthText: string, dayText: string) => {
+				const formatted = this.toValidatedISODate(
+					Number(yearText),
+					Number(monthText),
+					Number(dayText)
+				);
+				return formatted ? `${prefix}${formatted}` : match;
+			}
+		);
+
+		if (this.getNumericDateOrder() !== "day-first") {
+			return withYearFirstDates;
+		}
+
+		return withYearFirstDates.replace(
+			/(^|[^\p{L}\p{N}_])(\d{1,2})[/.](\d{1,2})[/.](\d{4})(?=$|[^\p{L}\p{N}_])/gu,
+			(match, prefix: string, dayText: string, monthText: string, yearText: string) => {
+				const formatted = this.toValidatedISODate(
+					Number(yearText),
+					Number(monthText),
+					Number(dayText)
+				);
+				return formatted ? `${prefix}${formatted}` : match;
+			}
+		);
+	}
+
+	private getNumericDateOrder(): NumericDateOrder {
+		if (this.options.dateOrder) {
+			return this.options.dateOrder;
+		}
+
+		const locale = this.options.dateLocale || this.languageConfig.code;
+		try {
+			const parts = new Intl.DateTimeFormat(locale).formatToParts(new Date(2006, 10, 22));
+			const firstDatePart = parts.find((part) =>
+				part.type === "day" || part.type === "month" || part.type === "year"
+			);
+			if (firstDatePart?.type === "day") {
+				return "day-first";
+			}
+		} catch {
+			// Fall back to month-first, matching chrono's English numeric-date default.
+		}
+
+		return "month-first";
+	}
+
+	private toValidatedISODate(year: number, month: number, day: number): string | null {
+		const parsed = new Date(Date.UTC(year, month - 1, day));
+		if (
+			parsed.getUTCFullYear() !== year ||
+			parsed.getUTCMonth() !== month - 1 ||
+			parsed.getUTCDate() !== day
+		) {
+			return null;
+		}
+
+		return `${year}-${this.padDatePart(month)}-${this.padDatePart(day)}`;
+	}
+
+	private padDatePart(value: number): string {
+		return String(value).padStart(2, "0");
 	}
 
 	/**

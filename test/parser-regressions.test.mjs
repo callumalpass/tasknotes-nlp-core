@@ -7,7 +7,10 @@ const createParser = (options = {}) =>
 		options.statuses || [],
 		options.priorities || [],
 		options.defaultToScheduled ?? false,
-		options.language || "en"
+		options.language || "en",
+		options.triggers,
+		options.userFields,
+		options.parserOptions
 	);
 
 describe("date trigger phrase matching", () => {
@@ -61,6 +64,140 @@ describe("date trigger phrase matching", () => {
 			assert.equal(result.scheduledDate, "2026-05-01");
 			assert.equal(result.dueDate, "2026-05-13");
 		}
+	});
+});
+
+describe("locale-aware numeric date parsing", () => {
+	it("parses DD/MM/YYYY for day-first date locales", () => {
+		const parser = createParser({
+			defaultToScheduled: true,
+			parserOptions: { dateLocale: "en-GB" },
+		});
+
+		const result = parser.parseInput("11/06/2026");
+
+		assert.equal(result.scheduledDate, "2026-06-11");
+	});
+
+	it("parses explicit trigger dates with day-first date locales", () => {
+		const parser = createParser({
+			parserOptions: { dateLocale: "en-GB" },
+		});
+
+		const result = parser.parseInput("due 11/06/2026");
+
+		assert.equal(result.dueDate, "2026-06-11");
+	});
+
+	it("keeps MM/DD/YYYY for month-first date locales", () => {
+		const parser = createParser({
+			defaultToScheduled: true,
+			parserOptions: { dateLocale: "en-US" },
+		});
+
+		const result = parser.parseInput("11/06/2026");
+
+		assert.equal(result.scheduledDate, "2026-11-06");
+	});
+
+	it("accepts YYYY/MM/DD regardless of date locale", () => {
+		const parser = createParser({
+			defaultToScheduled: true,
+			parserOptions: { dateLocale: "en-GB" },
+		});
+
+		const result = parser.parseInput("2026/06/11");
+
+		assert.equal(result.scheduledDate, "2026-06-11");
+	});
+
+	it("supports explicit date order override", () => {
+		const parser = createParser({
+			defaultToScheduled: true,
+			parserOptions: { dateOrder: "day-first" },
+		});
+
+		const result = parser.parseInput("11.06.2026");
+
+		assert.equal(result.scheduledDate, "2026-06-11");
+	});
+});
+
+describe("literal escapes", () => {
+	it("keeps quoted course-code hours in the title instead of parsing a time estimate", () => {
+		const result = createParser().parseInput('BIO "123H" - HW1');
+
+		assert.equal(result.title, "BIO 123H - HW1");
+		assert.equal(result.estimate, undefined);
+	});
+
+	it("keeps quoted date words in the title instead of parsing dates", () => {
+		const result = createParser().parseInput('Something "Today"');
+
+		assert.equal(result.title, "Something Today");
+		assert.equal(result.scheduledDate, undefined);
+		assert.equal(result.dueDate, undefined);
+	});
+
+	it("supports backtick and single-quote literal spans", () => {
+		const backtickResult = createParser().parseInput("Read `tomorrow` magazine");
+		const singleQuoteResult = createParser().parseInput("Review 'Today is the Day' book");
+
+		assert.equal(backtickResult.title, "Read tomorrow magazine");
+		assert.equal(backtickResult.scheduledDate, undefined);
+		assert.equal(singleQuoteResult.title, "Review Today is the Day book");
+		assert.equal(singleQuoteResult.scheduledDate, undefined);
+	});
+
+	it("keeps escaped triggers in the title without the escape slash", () => {
+		const result = createParser().parseInput("Some task \\@ABC");
+
+		assert.equal(result.title, "Some task @ABC");
+		assert.deepEqual(result.contexts, []);
+	});
+
+	it("keeps escaped date words in the title", () => {
+		const result = createParser({ defaultToScheduled: true }).parseInput(
+			"Read \\tomorrow magazine"
+		);
+
+		assert.equal(result.title, "Read tomorrow magazine");
+		assert.equal(result.scheduledDate, undefined);
+		assert.equal(result.dueDate, undefined);
+	});
+
+	it("keeps escaped time estimates in the title", () => {
+		const result = createParser().parseInput("BIO \\123H - HW1");
+
+		assert.equal(result.title, "BIO 123H - HW1");
+		assert.equal(result.estimate, undefined);
+	});
+
+	it("does not treat path backslashes as NLP escapes", () => {
+		const result = createParser().parseInput("Use C:\\Users folder");
+
+		assert.equal(result.title, "Use C:\\Users folder");
+	});
+
+	it("preserves quoted user field values after literal protection", () => {
+		const parser = createParser({
+			triggers: {
+				triggers: [{ propertyId: "assignee", trigger: "assignee:", enabled: true }],
+			},
+			userFields: [
+				{
+					id: "assignee",
+					displayName: "Assignee",
+					key: "assignee",
+					type: "text",
+				},
+			],
+		});
+
+		const result = parser.parseInput('my task assignee:"John Doe"');
+
+		assert.equal(result.title, "my task");
+		assert.equal(result.userFields.assignee, "John Doe");
 	});
 });
 

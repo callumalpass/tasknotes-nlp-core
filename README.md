@@ -110,7 +110,8 @@ new NaturalLanguageParserCore(
   defaultToScheduled?,
   languageCode?,
   nlpTriggers?,
-  userFields?
+  userFields?,
+  options?
 )
 ```
 
@@ -122,6 +123,12 @@ new NaturalLanguageParserCore(
 - `languageCode`: one of supported codes (defaults to `en`).
 - `nlpTriggers`: trigger map for tags/contexts/projects/status/priority.
 - `userFields`: custom field definitions with trigger support.
+- `options.dateLocale`: locale used for ambiguous numeric dates, for example `en-GB` parses `11/06/2026` as `2026-06-11`.
+- `options.dateOrder`: explicit numeric date order override, either `day-first` or `month-first`.
+
+Quoted spans and backslash-prefixed literals are preserved as plain title text
+instead of being parsed as NLP syntax. For example, `"Today"` and `\tomorrow`
+remain literal text, and `\@ABC` remains `@ABC` instead of becoming a context.
 
 ## Trigger Configuration
 

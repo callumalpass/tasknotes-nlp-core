@@ -228,12 +228,44 @@ export class NaturalLanguageParserCore {
 	}
 
 	private protectNlpLiterals(input: string): { text: string; literals: string[] } {
-		const quoted = this.protectQuotedLiterals(input);
+		const structured = this.protectObsidianLinks(input);
+		const quoted = this.protectQuotedLiterals(structured.text, structured.literals);
 		return this.protectEscapedLiterals(quoted.text, quoted.literals);
 	}
 
-	private protectQuotedLiterals(input: string): { text: string; literals: string[] } {
+	private protectObsidianLinks(input: string): { text: string; literals: string[] } {
 		const literals: string[] = [];
+		let text = "";
+		let index = 0;
+
+		while (index < input.length) {
+			if (!input.startsWith("[[", index)) {
+				text += input[index];
+				index += 1;
+				continue;
+			}
+
+			const endIndex = input.indexOf("]]", index + 2);
+			if (endIndex === -1) {
+				text += input[index];
+				index += 1;
+				continue;
+			}
+
+			const literal = input.slice(index, endIndex + 2);
+			const placeholder = `__TASKNOTES_NLP_LITERAL_${literals.length}__`;
+			literals.push(literal);
+			text += placeholder;
+			index = endIndex + 2;
+		}
+
+		return { text, literals };
+	}
+
+	private protectQuotedLiterals(
+		input: string,
+		literals: string[] = []
+	): { text: string; literals: string[] } {
 		let text = "";
 		let index = 0;
 
@@ -313,6 +345,13 @@ export class NaturalLanguageParserCore {
 		parsed.title = this.restoreProtectedLiteralsInText(parsed.title, literals)
 			.replace(/\s+/g, " ")
 			.trim();
+		parsed.tags = parsed.tags.map((tag) => this.restoreProtectedLiteralsInText(tag, literals));
+		parsed.contexts = parsed.contexts.map((context) =>
+			this.restoreProtectedLiteralsInText(context, literals)
+		);
+		parsed.projects = parsed.projects.map((project) =>
+			this.restoreProtectedLiteralsInText(project, literals)
+		);
 		if (parsed.details) {
 			parsed.details = this.restoreProtectedLiteralsInText(parsed.details, literals);
 		}

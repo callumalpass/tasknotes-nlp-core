@@ -199,6 +199,45 @@ describe("literal escapes", () => {
 		assert.equal(result.title, "my task");
 		assert.equal(result.userFields.assignee, "John Doe");
 	});
+
+	it("keeps context triggers inside wikilinks in the title", () => {
+		for (const [input, expectedTitle] of [
+			[
+				"Follow up on [[Meeting @ Conference Room]] discussion",
+				"Follow up on [[Meeting @ Conference Room]] discussion",
+			],
+			["Send [[Email@domain.com]] to client", "Send [[Email@domain.com]] to client"],
+			["Call [[@John Smith]] about project", "Call [[@John Smith]] about project"],
+			[
+				"Forward [[user1@domain.com to user2@domain.com]] email",
+				"Forward [[user1@domain.com to user2@domain.com]] email",
+			],
+		]) {
+			const result = createParser().parseInput(input);
+
+			assert.equal(result.title, expectedTitle);
+			assert.deepEqual(result.contexts, []);
+		}
+	});
+
+	it("extracts contexts outside wikilinks while preserving link text", () => {
+		const result = createParser().parseInput(
+			"Follow up on [[Meeting @ Office]] @work @urgent"
+		);
+
+		assert.equal(result.title, "Follow up on [[Meeting @ Office]]");
+		assert.deepEqual(result.contexts, ["work", "urgent"]);
+	});
+
+	it("still extracts wikilink projects after link protection", () => {
+		const result = createParser().parseInput(
+			"Prepare agenda +[[Meeting @ Conference Room]] @work"
+		);
+
+		assert.equal(result.title, "Prepare agenda");
+		assert.deepEqual(result.projects, ["[[Meeting @ Conference Room]]"]);
+		assert.deepEqual(result.contexts, ["work"]);
+	});
 });
 
 describe("custom status and priority phrase matching", () => {

@@ -215,7 +215,7 @@ npm run release:minor   # x.y.z -> x.(y+1).0
 npm run release:major   # x.y.z -> (x+1).0.0
 ```
 
-These commands run `npm version`, create a git tag, push `main` with tags, and publish to npm.
+These commands run `npm version`, create a git tag, and push `main` with tags. GitHub Actions verifies and publishes the tagged version to npm.
 
 ## License
 

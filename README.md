@@ -132,6 +132,23 @@ remain literal text, and `\@ABC` remains `@ABC` instead of becoming a context.
 
 ## Trigger Configuration
 
+Starting with 0.2.0, tag, context, project and custom-field selectors match only
+at the start of input or after whitespace (including tabs). The boundary is
+checked against original input positions: removing `@work` from
+`Task @work+project` does not make `+project` a selector. `task@work`, `(@work)`,
+email addresses, URL fragments and `C++programming` stay literal under these
+selector rules. Status/priority phrase fallback and date parsing are unchanged
+by this boundary contract; this is not a universal URL/code shield.
+
+Only the first line is parsed; subsequent lines are details. Wikilinks, quoted
+spans (double quotes, single quotes or backticks), and escaped tokens are
+protected before extraction, including nested quoted wikilinks.
+
+A repeated project prefix removes exactly one configured prefix:
+`++personal` produces project `+personal`, and `::::personal` with prefix `::`
+produces project `::personal`. Linked projects are returned before simple
+projects, preserving input order within each group.
+
 Default triggers:
 
 - `#` -> `tags`
@@ -179,6 +196,12 @@ import { getAvailableLanguages, detectSystemLanguage } from "tasknotes-nlp-core"
 ```
 
 Note: `detectSystemLanguage()` uses `navigator.language` when available; in non-browser runtimes it falls back to `en`.
+
+Italian relative days `oggi`, `domani` and `dopodomani` use the local calendar
+date. Bare words follow `defaultToScheduled`; `entro` and `per` set Due, while
+`programmato per` sets Scheduled. This is partial Italian date support, not a
+complete Italian Chrono locale. Only unprotected title text is date-parsed;
+`[[oggi]]`, `+[[domani]]`, `#domani`, `@oggi`, `\\oggi`, and details stay literal.
 
 ## Recurrence Output
 

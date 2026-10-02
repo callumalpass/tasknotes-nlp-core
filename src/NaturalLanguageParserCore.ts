@@ -131,6 +131,22 @@ export class NaturalLanguageParserCore {
 	 */
 	private getChronoParser(): any {
 		const locale = this.languageConfig.chronoLocale;
+		if (this.languageConfig.code === "it") {
+			// Chrono has no Italian locale. Extend its fallback only in the date stage,
+			// where literals, metadata and details have already been separated.
+			const parser = chrono.en.casual.clone();
+			parser.parsers.push({
+				pattern: () => /(?<![\p{L}\p{N}\p{M}_])(dopodomani|domani|oggi)(?![\p{L}\p{N}\p{M}_])/iu,
+				extract: (context, match) => {
+					const offset = { oggi: 0, domani: 1, dopodomani: 2 }[match[1].toLowerCase()]!;
+					const date = new Date(context.refDate);
+					date.setHours(12, 0, 0, 0);
+					date.setDate(date.getDate() + offset);
+					return { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() };
+				},
+			});
+			return parser;
+		}
 		return (chrono as any)[locale] || chrono;
 	}
 
@@ -141,18 +157,16 @@ export class NaturalLanguageParserCore {
 	private buildProcessingPipeline(): ParseProcessor[] {
 		return [
 			{
-				name: "extractTags",
-				process: (text: string, result: ParsedTaskData) => this.extractTags(text, result),
-			},
-			{
-				name: "extractContexts",
-				process: (text: string, result: ParsedTaskData) =>
-					this.extractContexts(text, result),
-			},
-			{
-				name: "extractProjects",
-				process: (text: string, result: ParsedTaskData) =>
-					this.extractProjects(text, result),
+				name: "extractMetadata",
+				process: (text: string, result: ParsedTaskData) => {
+					// Keep offsets stable until all selector passes finish. Each pass
+					// checks the original preceding character, not newly exposed spaces.
+					let remaining = this.extractTags(text, result, text);
+					remaining = this.extractContexts(remaining, result, text);
+					remaining = this.extractProjects(remaining, result, text);
+					remaining = this.extractUserFields(remaining, result, text);
+					return this.cleanupWhitespace(remaining);
+				},
 			},
 			{
 				name: "extractPriority",
@@ -172,11 +186,6 @@ export class NaturalLanguageParserCore {
 				name: "extractTimeEstimate",
 				process: (text: string, result: ParsedTaskData) =>
 					this.extractTimeEstimate(text, result),
-			},
-			{
-				name: "extractUserFields",
-				process: (text: string, result: ParsedTaskData) =>
-					this.extractUserFields(text, result),
 			},
 			{
 				name: "parseUnifiedDatesAndTimes",
@@ -224,6 +233,8 @@ export class NaturalLanguageParserCore {
 		// 4. Validate and finalize the result
 		const finalized = this.validateAndCleanupResult(result);
 		this.restoreProtectedLiterals(finalized, protectedInput.literals);
+		// Preserve linked-project-first ordering, with input order within each group.
+		finalized.projects.sort((a, b) => Number(b.startsWith("[[")) - Number(a.startsWith("[[")));
 		return finalized;
 	}
 
@@ -370,9 +381,10 @@ export class NaturalLanguageParserCore {
 
 	private restoreProtectedLiteralsInText(text: string, literals: string[]): string {
 		let restored = text;
-		literals.forEach((literal, index) => {
-			restored = restored.replace(`__TASKNOTES_NLP_LITERAL_${index}__`, literal);
-		});
+		// Later literals can contain placeholders for earlier protected spans.
+		for (let index = literals.length - 1; index >= 0; index -= 1) {
+			restored = restored.split(`__TASKNOTES_NLP_LITERAL_${index}__`).join(literals[index]);
+		}
 		return restored;
 	}
 
@@ -524,41 +536,41 @@ export class NaturalLanguageParserCore {
 	}
 
 	/** Extracts tags from the text and adds them to the result object. */
-	private extractTags(text: string, result: ParsedTaskData): string {
+	private extractTags(text: string, result: ParsedTaskData, original: string): string {
 		const trigger = this.triggerConfig.getTagTrigger();
 		if (!trigger) return text; // Tags disabled
 
 		const escapedTrigger = this.escapeRegex(trigger);
 		// Use Unicode-aware pattern to support non-ASCII characters (accented, Cyrillic, CJK, etc.)
 		const tagPattern = new RegExp(`${escapedTrigger}[\\p{L}\\p{N}\\p{M}_/-]+`, "gu");
-		const tagMatches = text.match(tagPattern);
+		const tagMatches = this.matchTriggerTokens(text, tagPattern, original);
 
 		if (tagMatches) {
-			result.tags.push(...tagMatches.map((tag) => tag.substring(trigger.length)));
-			return this.cleanupWhitespace(text.replace(tagPattern, ""));
+			result.tags.push(...tagMatches.map((tag) => tag[0].substring(trigger.length)));
+			return this.removeTriggerTokens(text, tagMatches);
 		}
 		return text;
 	}
 
 	/** Extracts contexts from the text and adds them to the result object. */
-	private extractContexts(text: string, result: ParsedTaskData): string {
+	private extractContexts(text: string, result: ParsedTaskData, original: string): string {
 		const trigger = this.triggerConfig.getContextTrigger();
 		if (!trigger) return text; // Contexts disabled
 
 		const escapedTrigger = this.escapeRegex(trigger);
 		// Use Unicode-aware pattern to support non-ASCII characters (accented, Cyrillic, CJK, etc.)
 		const contextPattern = new RegExp(`${escapedTrigger}[\\p{L}\\p{N}\\p{M}_/-]+`, "gu");
-		const contextMatches = text.match(contextPattern);
+		const contextMatches = this.matchTriggerTokens(text, contextPattern, original);
 
 		if (contextMatches) {
-			result.contexts.push(...contextMatches.map((context) => context.substring(trigger.length)));
-			return this.cleanupWhitespace(text.replace(contextPattern, ""));
+			result.contexts.push(...contextMatches.map((context) => context[0].substring(trigger.length)));
+			return this.removeTriggerTokens(text, contextMatches);
 		}
 		return text;
 	}
 
 	/** Extracts projects and [[wikilinks]] from the text and adds them to the result object. */
-	private extractProjects(text: string, result: ParsedTaskData): string {
+	private extractProjects(text: string, result: ParsedTaskData, original: string): string {
 		const trigger = this.triggerConfig.getProjectTrigger();
 		if (!trigger) return text; // Projects disabled
 
@@ -567,26 +579,26 @@ export class NaturalLanguageParserCore {
 
 		// Extract trigger[[wikilink]] patterns first (more specific)
 		const wikilinkPattern = new RegExp(`${escapedTrigger}\\[\\[.*?\\]\\]`, "g");
-		const wikilinkProjectMatches = workingText.match(wikilinkPattern);
+		const wikilinkProjectMatches = this.matchTriggerTokens(workingText, wikilinkPattern, original);
 		if (wikilinkProjectMatches) {
 			result.projects.push(
 				...wikilinkProjectMatches.map((project) => {
 					// Remove the trigger prefix but keep [[ ]]
-					let projectName = project.slice(trigger.length); // Remove just the trigger
+					const projectName = project[0].slice(trigger.length); // Remove just the trigger
 					// Keep the full wikilink as-is for now - resolution will happen in InstantTaskConvertService
 					return projectName;
 				})
 			);
-			workingText = this.cleanupWhitespace(workingText.replace(wikilinkPattern, ""));
+			workingText = this.removeTriggerTokens(workingText, wikilinkProjectMatches);
 		}
 
 		// Extract simple word projects
 		// Use Unicode-aware pattern to support non-ASCII characters (accented, Cyrillic, CJK, etc.)
-		const projectPattern = new RegExp(`${escapedTrigger}[\\p{L}\\p{N}\\p{M}_/-]+`, "gu");
-		const projectMatches = workingText.match(projectPattern);
+		const projectPattern = new RegExp(`(?:${escapedTrigger})+[\\p{L}\\p{N}\\p{M}_/-]+`, "gu");
+		const projectMatches = this.matchTriggerTokens(workingText, projectPattern, original);
 		if (projectMatches) {
-			result.projects.push(...projectMatches.map((project) => project.substring(trigger.length)));
-			workingText = this.cleanupWhitespace(workingText.replace(projectPattern, ""));
+			result.projects.push(...projectMatches.map((project) => project[0].substring(trigger.length)));
+			workingText = this.removeTriggerTokens(workingText, projectMatches);
 		}
 
 		return workingText;
@@ -596,7 +608,7 @@ export class NaturalLanguageParserCore {
 	 * Extracts user-defined field values from the text
 	 * Supports quoted values for multi-word content: trigger "multi word value"
 	 */
-	private extractUserFields(text: string, result: ParsedTaskData): string {
+	private extractUserFields(text: string, result: ParsedTaskData, original: string): string {
 		let workingText = text;
 
 		// Get all enabled user field triggers
@@ -620,9 +632,9 @@ export class NaturalLanguageParserCore {
 				// 2. Single/double word: word or word-with-dash (Unicode-aware)
 				const pattern = new RegExp(`${escapedTrigger}(?:"([^"]+)"|([\\p{L}\\p{N}\\p{M}_/-]+))`, "gu");
 				const values: string[] = [];
-				let match;
+				const matches = this.matchTriggerTokens(workingText, pattern, original);
 
-				while ((match = pattern.exec(workingText)) !== null) {
+				for (const match of matches) {
 					// Group 1 is quoted value, Group 2 is unquoted value
 					const value = match[1] || match[2];
 					values.push(value);
@@ -631,7 +643,7 @@ export class NaturalLanguageParserCore {
 				if (values.length > 0) {
 					if (!result.userFields) result.userFields = {};
 					result.userFields[userField.id] = values;
-					workingText = this.cleanupWhitespace(workingText.replace(pattern, ""));
+					workingText = this.removeTriggerTokens(workingText, matches);
 				}
 			}
 			// For text/boolean/number fields, extract single value (supports quoted multi-word)
@@ -640,7 +652,7 @@ export class NaturalLanguageParserCore {
 				// 1. Quoted string: "anything inside quotes"
 				// 2. Single word: word or word-with-dash (Unicode-aware)
 				const pattern = new RegExp(`${escapedTrigger}(?:"([^"]+)"|([\\p{L}\\p{N}\\p{M}_/-]+))`, "u");
-				const match = workingText.match(pattern);
+				const match = this.matchTriggerTokens(workingText, pattern, original)[0];
 
 				if (match) {
 					// Group 1 is quoted value, Group 2 is unquoted value
@@ -655,25 +667,41 @@ export class NaturalLanguageParserCore {
 						result.userFields[userField.id] = value;
 					}
 
-					workingText = this.cleanupWhitespace(workingText.replace(pattern, ""));
+					workingText = this.removeTriggerTokens(workingText, [match]);
 				}
 			}
 			// For date fields, try to parse as date (supports quoted values too)
 			else if (userField.type === "date") {
 				// Match trigger followed by either quoted or unquoted date-like pattern (Unicode-aware)
 				const pattern = new RegExp(`${escapedTrigger}(?:"([^"]+)"|([\\p{L}\\p{N}\\p{M}_/-]+))`, "u");
-				const match = workingText.match(pattern);
+				const match = this.matchTriggerTokens(workingText, pattern, original)[0];
 
 				if (match) {
 					const value = match[1] || match[2];
 					if (!result.userFields) result.userFields = {};
 					result.userFields[userField.id] = value; // Store as-is, let consuming code parse
-					workingText = this.cleanupWhitespace(workingText.replace(pattern, ""));
+					workingText = this.removeTriggerTokens(workingText, [match]);
 				}
 			}
 		}
 
 		return workingText;
+	}
+
+	private matchTriggerTokens(text: string, pattern: RegExp, original: string): RegExpMatchArray[] {
+		const globalPattern = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`);
+		return Array.from(text.matchAll(globalPattern)).filter((match) =>
+			match.index === 0 || /\s/u.test(original[match.index - 1])
+		);
+	}
+
+	private removeTriggerTokens(text: string, matches: RegExpMatchArray[]): string {
+		let remaining = text;
+		for (const match of matches) {
+			const start = match.index!;
+			remaining = remaining.slice(0, start) + " ".repeat(match[0].length) + remaining.slice(start + match[0].length);
+		}
+		return remaining;
 	}
 
 	/** Extracts priority using shared phrase matching for custom and fallback priorities. */
@@ -959,6 +987,10 @@ export class NaturalLanguageParserCore {
 					phrases: langTriggers.scheduled,
 				},
 			];
+
+			// Italian "per" is due, but is also part of "programmato per".
+			// Consume the more specific scheduled phrase before the standalone due word.
+			if (this.languageConfig.code === "it") triggerPatterns.reverse();
 
 			// Check for explicit triggers - process all triggers, not just the first one
 			let foundExplicitTrigger = false;

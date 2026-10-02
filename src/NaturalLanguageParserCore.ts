@@ -165,7 +165,7 @@ export class NaturalLanguageParserCore {
 					remaining = this.extractContexts(remaining, result, text);
 					remaining = this.extractProjects(remaining, result, text);
 					remaining = this.extractUserFields(remaining, result, text);
-					return this.cleanupWhitespace(remaining);
+					return remaining === text ? text : this.cleanupWhitespace(remaining);
 				},
 			},
 			{

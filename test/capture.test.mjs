@@ -36,6 +36,12 @@ describe("nested literal restoration", () => {
 });
 
 describe("original-input selector boundaries", () => {
+	it("does not normalize spaces before configured phrase extraction when no selectors match", () => {
+		const custom = new NaturalLanguageParserCore([{ id: "spaces", value: "spaces", label: "Status   With   Spaces", color: "blue", isCompleted: false, order: 0 }]);
+		const result = custom.parseInput("Task Status   With   Spaces today");
+		assert.equal(result.status, "spaces");
+		assert.equal(result.title, "Task");
+	});
 	for (const input of ["Send jane+work@example.com email", "Visit https://example.com/path#section", "Visit https://example.com/@user/path", "Learn C++programming", "Task (@work)", "task@work", "Task url/text:value", "Task xlist:value", "Task xboolean:true", "Task xnumber:12", "Task xdate:value"]) {
 		it(`preserves ${input}`, () => {
 			const result = parser().parseInput(input);

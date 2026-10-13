@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Keep recurrence words in hyphenated task titles, such as `weekly-review`, instead of removing part of the title and setting a repeat schedule.
+
 ## 0.2.0
 
 - Tag, context, project and custom-field selectors now require start-of-input or preceding whitespace, checked against original input positions. Punctuation-adjacent selectors such as `(@work)` no longer extract metadata. Emails, URL fragments and C++ tokens are no longer split by these selectors.

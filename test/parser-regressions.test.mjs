@@ -13,6 +13,21 @@ const createParser = (options = {}) =>
 		options.parserOptions
 	);
 
+describe("recurrence token boundaries", () => {
+	it("keeps hyphenated frequencies in the title while parsing standalone commands", () => {
+		const parser = createParser();
+		for (const token of ["weekly-review", "due-only-weekly", "daily-check", "monthly-report", "yearly-plan", "annually-renew"]) {
+			const title = `Prepare ${token}`;
+			const literal = parser.parseInput(title);
+			assert.equal(literal.title, title);
+			assert.equal(literal.recurrence, undefined);
+			const recurring = parser.parseInput(`${title} every week`);
+			assert.equal(recurring.title, title);
+			assert.equal(recurring.recurrence, "FREQ=WEEKLY");
+		}
+	});
+});
+
 describe("date trigger phrase matching", () => {
 	it("removes explicit date triggers and their connecting text from titles", () => {
 		for (const input of ["Task due 2026-05-13", "Task scheduled for 2026-05-13"]) {

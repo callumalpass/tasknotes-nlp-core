@@ -1179,8 +1179,14 @@ export class NaturalLanguageParserCore {
 		const lang = this.languageConfig.recurrence;
 		const patterns = [];
 
-		// Use pre-configured boundary matching
-		const { boundary, endBoundary } = this.boundaries;
+		// Frequencies inside compound words are title text, not commands.
+		// Retain whitespace boundaries for languages that require them.
+		const boundary = this.boundaries.isNonAscii
+			? this.boundaries.boundary
+			: "(?<!-)\\b";
+		const endBoundary = this.boundaries.isNonAscii
+			? this.boundaries.endBoundary
+			: "\\b(?!-)";
 
 		// Helper function to escape and join patterns
 		const escapeAndJoin = (patterns: string[]) =>

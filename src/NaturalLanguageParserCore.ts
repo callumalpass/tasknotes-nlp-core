@@ -1183,10 +1183,10 @@ export class NaturalLanguageParserCore {
 		// Retain whitespace boundaries for languages that require them.
 		const boundary = this.boundaries.isNonAscii
 			? this.boundaries.boundary
-			: "(?<!-)\\b";
+			: "(?<![\\p{L}\\p{N}\\p{M}_-])";
 		const endBoundary = this.boundaries.isNonAscii
 			? this.boundaries.endBoundary
-			: "\\b(?!-)";
+			: "(?![\\p{L}\\p{N}\\p{M}_-])";
 
 		// Helper function to escape and join patterns
 		const escapeAndJoin = (patterns: string[]) =>
@@ -1236,7 +1236,7 @@ export class NaturalLanguageParserCore {
 			{
 				regex: new RegExp(
 					`${boundary}(${everyKeywords})\\s+(${ordinalPatterns})\\s+(${weekdayPatterns})${endBoundary}`,
-					"i"
+					"iu"
 				),
 				handler: (match: RegExpMatchArray) => {
 					const ordinalText = match[2].toLowerCase();
@@ -1288,7 +1288,7 @@ export class NaturalLanguageParserCore {
 			{
 				regex: new RegExp(
 					`${boundary}(${everyKeywords})\\s+(\\d+)\\s+(${periodPatterns})${endBoundary}`,
-					"i"
+					"iu"
 				),
 				handler: (match: RegExpMatchArray) => {
 					const interval = parseInt(match[2]);
@@ -1322,7 +1322,7 @@ export class NaturalLanguageParserCore {
 			{
 				regex: new RegExp(
 					`${boundary}(${everyKeywords})\\s+(${otherKeywords})\\s+(${periodPatterns})${endBoundary}`,
-					"i"
+					"iu"
 				),
 				handler: (match: RegExpMatchArray) => {
 					const periodText = match[3].toLowerCase();
@@ -1367,7 +1367,7 @@ export class NaturalLanguageParserCore {
 			{
 				regex: new RegExp(
 					`${boundary}(${everyKeywords})\\s+(${weekdayPatterns})${endBoundary}`,
-					"i"
+					"iu"
 				),
 				handler: (match: RegExpMatchArray) => {
 					const dayText = match[2].toLowerCase();
@@ -1377,7 +1377,7 @@ export class NaturalLanguageParserCore {
 			},
 			// Plural weekdays ("mondays", "tuesdays")
 			{
-				regex: new RegExp(`${boundary}(${pluralWeekdayPatterns})${endBoundary}`, "i"),
+				regex: new RegExp(`${boundary}(${pluralWeekdayPatterns})${endBoundary}`, "iu"),
 				handler: (match: RegExpMatchArray) => {
 					const dayText = match[1].toLowerCase();
 					const rruleDay = this.getPluralWeekdayRRuleCode(dayText, lang);
@@ -1400,28 +1400,28 @@ export class NaturalLanguageParserCore {
 			{
 				regex: new RegExp(
 					`${boundary}(${escapeAndJoin(lang.frequencies.daily)})${endBoundary}`,
-					"i"
+					"iu"
 				),
 				handler: () => "FREQ=DAILY",
 			},
 			{
 				regex: new RegExp(
 					`${boundary}(${escapeAndJoin(lang.frequencies.weekly)})${endBoundary}`,
-					"i"
+					"iu"
 				),
 				handler: () => "FREQ=WEEKLY",
 			},
 			{
 				regex: new RegExp(
 					`${boundary}(${escapeAndJoin(lang.frequencies.monthly)})${endBoundary}`,
-					"i"
+					"iu"
 				),
 				handler: () => "FREQ=MONTHLY",
 			},
 			{
 				regex: new RegExp(
 					`${boundary}(${escapeAndJoin(lang.frequencies.yearly)})${endBoundary}`,
-					"i"
+					"iu"
 				),
 				handler: () => "FREQ=YEARLY",
 			},

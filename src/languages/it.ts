@@ -10,8 +10,12 @@ export const itConfig: NLPLanguageConfig = {
 	chronoLocale: "it",
 
 	dateTriggers: {
-		due: ["scadenza", "entro", "entro il", "deve essere fatto entro", "per il", "per", "termine"],
-		scheduled: ["programmato per", "programmato il", "iniziare il", "lavorare su", "il"],
+		due: ["scadenza", "entro", "entro il", "entro le", "deve essere fatto entro", "per il", "per", "termine"],
+		scheduled: [
+			"programmato per il", "programmato per", "programmato il",
+			"programmata per il", "programmata per", "programmata il",
+			"iniziare il", "lavorare su", "il",
+		],
 	},
 
 	recurrence: {

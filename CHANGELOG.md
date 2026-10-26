@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fix Italian `entro le` deadlines, feminine scheduling phrases and accented weekday recurrence (tasknotes#2428). Thanks to @starise for the report.
+
 ## 0.2.1
 
 - Keep recurrence words in hyphenated task titles, such as `weekly-review`, instead of removing part of the title and setting a repeat schedule.

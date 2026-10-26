@@ -26,12 +26,25 @@ describe("tasknotes#2428 Italian date expressions", () => {
 			assert.equal(result.dueDate, undefined);
 		});
 	}
-	it("retains separate due and scheduled expressions", () => {
-		const result = parser().parseInput(`${title} programmata per il 25/12/2026 entro il 26/12/2026`);
-		assert.equal(result.title, title);
-		assert.equal(result.scheduledDate, "2026-12-25");
-		assert.equal(result.dueDate, "2026-12-26");
-	});
+	for (const trigger of ["entro il", "per il"]) {
+		it(`${trigger} is due, not the nested scheduled il`, () => {
+			const result = parser().parseInput(`${title} ${trigger} 25/12/2026`);
+			assert.equal(result.title, title);
+			assert.equal(result.dueDate, "2026-12-25");
+			assert.equal(result.scheduledDate, undefined);
+		});
+	}
+	for (const expression of [
+		"programmata per il 25/12/2026 entro il 26/12/2026",
+		"entro il 26/12/2026 programmata per il 25/12/2026",
+	]) {
+		it(`retains both fields: ${expression}`, () => {
+			const result = parser().parseInput(`${title} ${expression}`);
+			assert.equal(result.title, title);
+			assert.equal(result.scheduledDate, "2026-12-25");
+			assert.equal(result.dueDate, "2026-12-26");
+		});
+	}
 	for (const [weekday, code] of [
 		["lunedì", "MO"], ["martedì", "TU"], ["mercoledì", "WE"],
 		["giovedì", "TH"], ["venerdì", "FR"], ["sabato", "SA"], ["domenica", "SU"],

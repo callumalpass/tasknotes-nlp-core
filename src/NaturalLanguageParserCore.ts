@@ -988,9 +988,15 @@ export class NaturalLanguageParserCore {
 				},
 			];
 
-			// Italian "per" is due, but is also part of "programmato per".
-			// Consume the more specific scheduled phrase before the standalone due word.
-			if (this.languageConfig.code === "it") triggerPatterns.reverse();
+			// Italian triggers overlap in both directions: "per il" is inside
+			// "programmato per il", but scheduled "il" is also inside due "entro il".
+			// Prefer the more specific matched phrase, not either field unconditionally.
+			if (this.languageConfig.code === "it") {
+				triggerPatterns.sort((a, b) =>
+					(this.findPhraseMatch(workingText, b.phrases)?.phrase.length ?? 0) -
+					(this.findPhraseMatch(workingText, a.phrases)?.phrase.length ?? 0)
+				);
+			}
 
 			// Check for explicit triggers - process all triggers, not just the first one
 			let foundExplicitTrigger = false;

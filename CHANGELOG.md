@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Resolve overlapping Italian date triggers by phrase specificity, preserving `entro il` and `per il` deadlines as well as full scheduling phrases.
 - Fix Italian `entro le` deadlines, feminine scheduling phrases and accented weekday recurrence (tasknotes#2428). Thanks to @starise for the report.
 
 ## 0.2.1

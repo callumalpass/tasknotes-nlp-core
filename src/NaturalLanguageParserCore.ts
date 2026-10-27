@@ -145,6 +145,52 @@ export class NaturalLanguageParserCore {
 					return { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() };
 				},
 			});
+			// Indexed by JavaScript day number, Sunday = 0.
+			const configuredWeekdays = this.languageConfig.recurrence.weekdays;
+			const weekdays = (
+				["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const
+			).map((day) => configuredWeekdays[day].map((name) => name.toLowerCase()));
+			const weekdayPattern = weekdays.flat().map(this.escapeRegex).join("|");
+			parser.parsers.push({
+				pattern: () =>
+					new RegExp(`(?<![\\p{L}\\p{N}\\p{M}_-])(${weekdayPattern})(?![\\p{L}\\p{N}\\p{M}_-])`, "iu"),
+				extract: (context, match) => {
+					// Like chrono's other locales, today's weekday means the same day next week.
+					const target = weekdays.findIndex((names) => names.includes(match[1].toLowerCase()));
+					const date = new Date(context.refDate);
+					date.setHours(12, 0, 0, 0);
+					date.setDate(date.getDate() + ((target - date.getDay() + 7) % 7 || 7));
+					return { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() };
+				},
+			});
+			// Merge "domani alle 20:00" and "2026-12-25 alle 20:00" into one result, as
+			// chrono's English refiner only joins dates and times across English connectors.
+			parser.refiners.push({
+				refine: (context, results) =>
+					results.reduce<typeof results>((merged, result) => {
+						const date = merged[merged.length - 1];
+						const gap = date
+							? context.text.substring(date.index + date.text.length, result.index)
+							: "";
+						if (
+							date &&
+							!date.end &&
+							!result.end &&
+							!date.start.isCertain("hour") &&
+							result.start.isCertain("hour") &&
+							!result.start.isCertain("day") &&
+							!result.start.isCertain("weekday") &&
+							/^\s*(?:alle(?:\s+ore)?|alla|ore|a|,)?\s*$/iu.test(gap)
+						) {
+							date.start.assign("hour", result.start.get("hour") ?? 0);
+							date.start.assign("minute", result.start.get("minute") ?? 0);
+							date.text = context.text.substring(date.index, result.index + result.text.length);
+							return merged;
+						}
+						merged.push(result);
+						return merged;
+					}, []),
+			});
 			return parser;
 		}
 		return (chrono as any)[locale] || chrono;
@@ -209,7 +255,10 @@ export class NaturalLanguageParserCore {
 
 		// 1. Separate title line from details
 		const protectedInput = this.protectNlpLiterals(input);
-		const normalizedInput = this.normalizeNumericDateLiterals(protectedInput.text);
+		const normalizedInput = this.normalizeNumericDateLiterals(
+			protectedInput.text,
+			protectedInput.literals
+		);
 		const [workingText, details] = this.extractTitleAndDetails(normalizedInput);
 		if (details) {
 			result.details = details;
@@ -451,32 +500,43 @@ export class NaturalLanguageParserCore {
 		return configured.length > 0 ? configured : ["#", "@", "+", "*", "!"];
 	}
 
-	private normalizeNumericDateLiterals(input: string): string {
+	/**
+	 * Rewrites valid numeric dates as ISO dates. Invalid ones, such as 32/12/2026 or
+	 * 29/02/2027, are protected as literals so chrono cannot parse a fragment of them.
+	 */
+	private normalizeNumericDateLiterals(input: string, literals: string[]): string {
+		const protectInvalid = (literal: string): string => {
+			const placeholder = `__TASKNOTES_NLP_LITERAL_${literals.length}__`;
+			literals.push(literal);
+			return placeholder;
+		};
+
 		const withYearFirstDates = input.replace(
-			/(^|[^\p{L}\p{N}_])(\d{4})[/.](\d{1,2})[/.](\d{1,2})(?=$|[^\p{L}\p{N}_])/gu,
-			(match, prefix: string, yearText: string, monthText: string, dayText: string) => {
+			/(^|[^\p{L}\p{N}_])((\d{4})[/.](\d{1,2})[/.](\d{1,2}))(?=$|[^\p{L}\p{N}_])/gu,
+			(_match, prefix: string, literal: string, yearText: string, monthText: string, dayText: string) => {
 				const formatted = this.toValidatedISODate(
 					Number(yearText),
 					Number(monthText),
 					Number(dayText)
 				);
-				return formatted ? `${prefix}${formatted}` : match;
+				return `${prefix}${formatted ?? protectInvalid(literal)}`;
 			}
 		);
 
-		if (this.getNumericDateOrder() !== "day-first") {
-			return withYearFirstDates;
-		}
-
+		const dayFirst = this.getNumericDateOrder() === "day-first";
 		return withYearFirstDates.replace(
-			/(^|[^\p{L}\p{N}_])(\d{1,2})[/.](\d{1,2})[/.](\d{4})(?=$|[^\p{L}\p{N}_])/gu,
-			(match, prefix: string, dayText: string, monthText: string, yearText: string) => {
-				const formatted = this.toValidatedISODate(
-					Number(yearText),
-					Number(monthText),
-					Number(dayText)
-				);
-				return formatted ? `${prefix}${formatted}` : match;
+			/(^|[^\p{L}\p{N}_])((\d{1,2})[/.](\d{1,2})[/.](\d{4}))(?=$|[^\p{L}\p{N}_])/gu,
+			(match, prefix: string, literal: string, firstText: string, secondText: string, yearText: string) => {
+				const [year, first, second] = [Number(yearText), Number(firstText), Number(secondText)];
+				if (dayFirst) {
+					const formatted = this.toValidatedISODate(year, second, first);
+					return `${prefix}${formatted ?? protectInvalid(literal)}`;
+				}
+				// Month-first locales keep chrono's day-first fallback for dates like 13/12/2026.
+				return this.toValidatedISODate(year, first, second) ||
+					this.toValidatedISODate(year, second, first)
+					? match
+					: `${prefix}${protectInvalid(literal)}`;
 			}
 		);
 	}
@@ -1358,7 +1418,14 @@ export class NaturalLanguageParserCore {
 			...lang.weekdays.saturday,
 			...lang.weekdays.sunday,
 		]);
-		const pluralWeekdayPatterns = escapeAndJoin([
+		// Invariable plurals such as Italian "lunedì" are also the singular day, which
+		// means a single date ("entro lunedì"). Only distinct plural forms imply recurrence.
+		const singularWeekdays = new Set(
+			Object.values(lang.weekdays as Record<string, string[]>)
+				.flat()
+				.map((day) => day.toLowerCase())
+		);
+		const pluralWeekdays = [
 			...lang.pluralWeekdays.monday,
 			...lang.pluralWeekdays.tuesday,
 			...lang.pluralWeekdays.wednesday,
@@ -1366,9 +1433,9 @@ export class NaturalLanguageParserCore {
 			...lang.pluralWeekdays.friday,
 			...lang.pluralWeekdays.saturday,
 			...lang.pluralWeekdays.sunday,
-		]);
+		].filter((day: string) => !singularWeekdays.has(day.toLowerCase()));
 
-		return [
+		const patterns = [
 			// "every [weekday]" patterns
 			{
 				regex: new RegExp(
@@ -1381,16 +1448,22 @@ export class NaturalLanguageParserCore {
 					return `FREQ=WEEKLY;BYDAY=${rruleDay}`;
 				},
 			},
+		];
+		if (pluralWeekdays.length > 0) {
 			// Plural weekdays ("mondays", "tuesdays")
-			{
-				regex: new RegExp(`${boundary}(${pluralWeekdayPatterns})${endBoundary}`, "iu"),
+			patterns.push({
+				regex: new RegExp(
+					`${boundary}(${escapeAndJoin(pluralWeekdays)})${endBoundary}`,
+					"iu"
+				),
 				handler: (match: RegExpMatchArray) => {
 					const dayText = match[1].toLowerCase();
 					const rruleDay = this.getPluralWeekdayRRuleCode(dayText, lang);
 					return `FREQ=WEEKLY;BYDAY=${rruleDay}`;
 				},
-			},
-		];
+			});
+		}
+		return patterns;
 	}
 
 	/**
@@ -1543,29 +1616,29 @@ export class NaturalLanguageParserCore {
 		// Use pre-configured boundary matching
 		const { boundary, endBoundary } = this.boundaries;
 
+		const hours = langConfig.hours.map((p) => this.escapeRegex(p)).join("|");
+		const minutes = langConfig.minutes.map((p) => this.escapeRegex(p)).join("|");
+		// Numbers must be whole tokens: "5 ore" inside "1,5 ore" or "2.5.3 ore" is not an estimate.
+		const number = "(?<!\\d[.,])(\\d+)";
+		const decimal = "(?<!\\d[.,])(\\d+(?:[.,]\\d{1,2})?)";
+
 		const patterns = [
 			// Combined format: 1h30m
 			{
 				regex: new RegExp(
-					`${boundary}(\\d+)(${langConfig.hours.map((p) => this.escapeRegex(p)).join("|")})\\s*(\\d+)(${langConfig.minutes.map((p) => this.escapeRegex(p)).join("|")})${endBoundary}`,
+					`${boundary}${number}(${hours})\\s*(\\d+)(${minutes})${endBoundary}`,
 					"i"
 				),
 				handler: (m: RegExpMatchArray) => parseInt(m[1]) * 60 + parseInt(m[3]),
 			},
-			// Hours: 1hr, 2 hours, 3h
+			// Hours: 1hr, 2 hours, 3h, 1.5 hours, 1,5 ore
 			{
-				regex: new RegExp(
-					`${boundary}(\\d+)\\s*(${langConfig.hours.map((p) => this.escapeRegex(p)).join("|")})${endBoundary}`,
-					"i"
-				),
-				handler: (m: RegExpMatchArray) => parseInt(m[1]) * 60,
+				regex: new RegExp(`${boundary}${decimal}\\s*(${hours})${endBoundary}`, "i"),
+				handler: (m: RegExpMatchArray) => Math.round(Number(m[1].replace(",", ".")) * 60),
 			},
 			// Minutes: 30min, 45 m, 15 minutes
 			{
-				regex: new RegExp(
-					`${boundary}(\\d+)\\s*(${langConfig.minutes.map((p) => this.escapeRegex(p)).join("|")})${endBoundary}`,
-					"i"
-				),
+				regex: new RegExp(`${boundary}${number}\\s*(${minutes})${endBoundary}`, "i"),
 				handler: (m: RegExpMatchArray) => parseInt(m[1]),
 			},
 		];

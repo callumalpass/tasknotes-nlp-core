@@ -57,15 +57,10 @@ describe("tasknotes#2428 Italian date expressions", () => {
 			});
 		}
 	}
-	it("supports accented plural and ordinal weekday endings", () => {
-		for (const [expression, recurrence] of [
-			["lunedì", "FREQ=WEEKLY;BYDAY=MO"],
-			["ogni secondo lunedì", "FREQ=MONTHLY;BYDAY=MO;BYSETPOS=2"],
-		]) {
-			const result = parser().parseInput(`${title} ${expression}`);
-			assert.equal(result.title, title);
-			assert.equal(result.recurrence, recurrence);
-		}
+	it("supports accented ordinal weekday endings", () => {
+		const result = parser().parseInput(`${title} ogni secondo lunedì`);
+		assert.equal(result.title, title);
+		assert.equal(result.recurrence, "FREQ=MONTHLY;BYDAY=MO;BYSETPOS=2");
 	});
 	it("does not extract weekdays from longer Unicode words or compounds", () => {
 		for (const word of ["lunedìx", "lunedìé", "lunedì2", "lunedì_", "lunedì\u0301", "lunedì-extra", "élunedì"]) {

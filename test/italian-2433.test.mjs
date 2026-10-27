@@ -96,6 +96,19 @@ describe("tasknotes#2433 Italian weekdays", () => {
 		expectFields("los lunes", { recurrence: "FREQ=WEEKLY;BYDAY=MO" }, "es");
 		expectFields("lunes", { scheduledDate: "2026-11-02" }, "es");
 	});
+	for (const [weekday, code] of [["lunes", "MO"], ["martes", "TU"], ["miércoles", "WE"], ["jueves", "TH"], ["viernes", "FR"], ["sábados", "SA"], ["domingos", "SU"]]) {
+		it(`los ${weekday} is explicitly recurring`, () => {
+			expectFields(`los ${weekday}`, { recurrence: `FREQ=WEEKLY;BYDAY=${code}` }, "es");
+		});
+	}
+	for (const text of ["Revisar los 3 días de feria", "Pagar los 2 meses atrasados"]) {
+		it(`does not treat a Spanish article as every: ${text}`, () => {
+			assert.deepEqual(fields(parser("es").parseInput(text)), {
+				title: text, dueDate: undefined, dueTime: undefined, scheduledDate: undefined,
+				scheduledTime: undefined, recurrence: undefined, estimate: undefined,
+			});
+		});
+	}
 	it("combines recurrence with a separate due date", () => {
 		expectFields("ogni lunedì entro venerdì", { recurrence: "FREQ=WEEKLY;BYDAY=MO", dueDate: "2026-10-30" });
 	});

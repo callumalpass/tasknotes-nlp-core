@@ -29,7 +29,7 @@ export const esConfig: NLPLanguageConfig = {
 			yearly: ["anual", "anualmente", "cada año", "todos los años", "por año"],
 		},
 
-		every: ["cada", "todos los", "todas las", "los", "las"],
+		every: ["cada", "todos los", "todas las"],
 		other: ["otro", "otra"],
 
 		weekdays: {
@@ -43,13 +43,13 @@ export const esConfig: NLPLanguageConfig = {
 		},
 
 		pluralWeekdays: {
-			monday: ["lunes"],
-			tuesday: ["martes"],
-			wednesday: ["miércoles"],
-			thursday: ["jueves"],
-			friday: ["viernes"],
-			saturday: ["sábados"],
-			sunday: ["domingos"],
+			monday: ["lunes", "los lunes"],
+			tuesday: ["martes", "los martes"],
+			wednesday: ["miércoles", "los miércoles"],
+			thursday: ["jueves", "los jueves"],
+			friday: ["viernes", "los viernes"],
+			saturday: ["sábados", "los sábados"],
+			sunday: ["domingos", "los domingos"],
 		},
 
 		ordinals: {

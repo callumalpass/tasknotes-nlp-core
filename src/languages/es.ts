@@ -29,7 +29,7 @@ export const esConfig: NLPLanguageConfig = {
 			yearly: ["anual", "anualmente", "cada año", "todos los años", "por año"],
 		},
 
-		every: ["cada", "todos los", "todas las"],
+		every: ["cada", "todos los", "todas las", "los", "las"],
 		other: ["otro", "otra"],
 
 		weekdays: {

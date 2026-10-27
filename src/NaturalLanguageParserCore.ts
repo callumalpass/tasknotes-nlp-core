@@ -46,7 +46,7 @@ export interface NaturalLanguageParserOptions {
  */
 interface ParseProcessor {
 	name: string;
-	process(text: string, result: ParsedTaskData): string;
+	process(text: string, result: ParsedTaskData, literals: string[]): string;
 }
 
 /**
@@ -155,11 +155,11 @@ export class NaturalLanguageParserCore {
 				pattern: () =>
 					new RegExp(`(?<![\\p{L}\\p{N}\\p{M}_-])(${weekdayPattern})(?![\\p{L}\\p{N}\\p{M}_-])`, "iu"),
 				extract: (context, match) => {
-					// Like chrono's other locales, today's weekday means the same day next week.
+					// Like chrono's other locales with forwardDate, today's weekday means today.
 					const target = weekdays.findIndex((names) => names.includes(match[1].toLowerCase()));
 					const date = new Date(context.refDate);
 					date.setHours(12, 0, 0, 0);
-					date.setDate(date.getDate() + ((target - date.getDay() + 7) % 7 || 7));
+					date.setDate(date.getDate() + ((target - date.getDay() + 7) % 7));
 					return { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() };
 				},
 			});
@@ -180,7 +180,7 @@ export class NaturalLanguageParserCore {
 							result.start.isCertain("hour") &&
 							!result.start.isCertain("day") &&
 							!result.start.isCertain("weekday") &&
-							/^\s*(?:alle(?:\s+ore)?|alla|ore|a|,)?\s*$/iu.test(gap)
+							/^\s*,?\s*(?:alle(?:\s+ore)?|alla|ore|a)?\s*$/iu.test(gap)
 						) {
 							date.start.assign("hour", result.start.get("hour") ?? 0);
 							date.start.assign("minute", result.start.get("minute") ?? 0);
@@ -230,8 +230,8 @@ export class NaturalLanguageParserCore {
 			},
 			{
 				name: "extractTimeEstimate",
-				process: (text: string, result: ParsedTaskData) =>
-					this.extractTimeEstimate(text, result),
+				process: (text: string, result: ParsedTaskData, literals: string[]) =>
+					this.extractTimeEstimate(text, result, literals),
 			},
 			{
 				name: "parseUnifiedDatesAndTimes",
@@ -269,7 +269,7 @@ export class NaturalLanguageParserCore {
 
 		for (const processor of this.processingPipeline) {
 			try {
-				remainingText = processor.process(remainingText, result);
+				remainingText = processor.process(remainingText, result, protectedInput.literals);
 			} catch (error) {
 				console.debug(`Error in processor ${processor.name}:`, error);
 				// Continue with other processors even if one fails
@@ -500,16 +500,18 @@ export class NaturalLanguageParserCore {
 		return configured.length > 0 ? configured : ["#", "@", "+", "*", "!"];
 	}
 
+	private protectLiteral(literal: string, literals: string[]): string {
+		const placeholder = `__TASKNOTES_NLP_LITERAL_${literals.length}__`;
+		literals.push(literal);
+		return placeholder;
+	}
+
 	/**
 	 * Rewrites valid numeric dates as ISO dates. Invalid ones, such as 32/12/2026 or
 	 * 29/02/2027, are protected as literals so chrono cannot parse a fragment of them.
 	 */
 	private normalizeNumericDateLiterals(input: string, literals: string[]): string {
-		const protectInvalid = (literal: string): string => {
-			const placeholder = `__TASKNOTES_NLP_LITERAL_${literals.length}__`;
-			literals.push(literal);
-			return placeholder;
-		};
+		const protectInvalid = (literal: string): string => this.protectLiteral(literal, literals);
 
 		const withYearFirstDates = input.replace(
 			/(^|[^\p{L}\p{N}_])((\d{4})[/.](\d{1,2})[/.](\d{1,2}))(?=$|[^\p{L}\p{N}_])/gu,
@@ -1610,7 +1612,7 @@ export class NaturalLanguageParserCore {
 	 * @param result ParsedTaskData object to populate
 	 * @returns Text with time estimate patterns removed
 	 */
-	private extractTimeEstimate(text: string, result: ParsedTaskData): string {
+	private extractTimeEstimate(text: string, result: ParsedTaskData, literals: string[]): string {
 		const langConfig = this.languageConfig.timeEstimate;
 
 		// Use pre-configured boundary matching
@@ -1658,7 +1660,12 @@ export class NaturalLanguageParserCore {
 			result.estimate = totalEstimate;
 		}
 
-		return workingText;
+		// Keep unsupported decimal durations ("1.5 min", "1.333 hours", "v1.5 hours") literal,
+		// so chrono cannot read part of them as a relative time.
+		return workingText.replace(
+			new RegExp(`(?<![\\p{N}.,])\\d+(?:[.,]\\d+)+\\s*(?:${hours}|${minutes})(?![\\p{L}\\p{N}_])`, "giu"),
+			(literal) => this.protectLiteral(literal, literals)
+		);
 	}
 
 	/**

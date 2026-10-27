@@ -58,6 +58,11 @@ describe("tasknotes#2433 decimal estimates", () => {
 	it("supports decimal hours in other languages", () => {
 		expectFields("1.5 hours", { estimate: 90 }, "en");
 	});
+	for (const expression of ["1.5 minutes", "1.5 min", "1.333 hours", "v1.5 hours", "2.5.3 hours"]) {
+		it(`keeps unsupported English decimals literal: ${expression}`, () => {
+			expectFields(expression, { title: `Nome attività ${expression}` }, "en");
+		});
+	}
 	for (const expression of ["1,5 minuti", "2.5.3 ore", "1,500 ore", "v1.5 ore"]) {
 		it(`only matches whole numbers: ${expression}`, () => {
 			expectFields(expression, { title: `Nome attività ${expression}` });
@@ -68,7 +73,7 @@ describe("tasknotes#2433 decimal estimates", () => {
 describe("tasknotes#2433 Italian weekdays", () => {
 	const weekdays = [
 		["lunedì", "MO", "2026-11-02"], ["martedì", "TU", "2026-11-03"],
-		["mercoledì", "WE", "2026-11-04"], ["giovedì", "TH", "2026-10-29"],
+		["mercoledì", "WE", "2026-10-28"], ["giovedì", "TH", "2026-10-29"],
 		["venerdì", "FR", "2026-10-30"], ["sabato", "SA", "2026-10-31"],
 		["domenica", "SU", "2026-11-01"],
 	];
@@ -87,6 +92,10 @@ describe("tasknotes#2433 Italian weekdays", () => {
 		expectFields("sabati", { recurrence: "FREQ=WEEKLY;BYDAY=SA" });
 		expectFields("domeniche", { recurrence: "FREQ=WEEKLY;BYDAY=SU" });
 	});
+	it("keeps Spanish los lunes as recurrence and bare lunes as a date", () => {
+		expectFields("los lunes", { recurrence: "FREQ=WEEKLY;BYDAY=MO" }, "es");
+		expectFields("lunes", { scheduledDate: "2026-11-02" }, "es");
+	});
 	it("combines recurrence with a separate due date", () => {
 		expectFields("ogni lunedì entro venerdì", { recurrence: "FREQ=WEEKLY;BYDAY=MO", dueDate: "2026-10-30" });
 	});
@@ -101,6 +110,7 @@ describe("tasknotes#2433 Italian date and time connectors", () => {
 	for (const [expression, expected] of [
 		["domani alle 20:00", { scheduledDate: "2026-10-29", scheduledTime: "20:00" }],
 		["domani 20:00", { scheduledDate: "2026-10-29", scheduledTime: "20:00" }],
+		["domani, alle 9:00", { scheduledDate: "2026-10-29", scheduledTime: "09:00" }],
 		["entro il 25/12/2026 alle 20:00", { dueDate: "2026-12-25", dueTime: "20:00" }],
 		["entro il 25/12/2026 20:00", { dueDate: "2026-12-25", dueTime: "20:00" }],
 		["entro venerdì alle ore 18:30", { dueDate: "2026-10-30", dueTime: "18:30" }],

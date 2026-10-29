@@ -59,5 +59,38 @@ export function detectSystemLanguage(): string {
 	return languageRegistry[systemLang] ? systemLang : "en";
 }
 
+type DeepPartialMerge<T> = {
+	[K in keyof T]?: T[K] extends Array<infer U> ? U[] : T[K] extends object ? DeepPartialMerge<T[K]> : T[K];
+};
+
+/** Additions to a language configuration; see mergeLanguageConfig. */
+export type LanguageOverrides = DeepPartialMerge<NLPLanguageConfig>;
+
+/**
+ * Returns a copy of a language configuration with additions: arrays are appended
+ * to the built-in ones, objects are merged and other values replace them.
+ */
+export function mergeLanguageConfig(
+	base: NLPLanguageConfig,
+	overrides?: LanguageOverrides
+): NLPLanguageConfig {
+	return overrides ? (merge(base, overrides) as NLPLanguageConfig) : base;
+}
+
+function merge(base: unknown, override: unknown): unknown {
+	if (override === undefined) return base;
+	if (Array.isArray(base) && Array.isArray(override)) return [...base, ...override];
+	if (isObject(base) && isObject(override)) {
+		const merged: Record<string, unknown> = { ...base };
+		for (const [key, value] of Object.entries(override)) merged[key] = merge(base[key], value);
+		return merged;
+	}
+	return override;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 // Re-export types for convenience
 export * from "./types.js";

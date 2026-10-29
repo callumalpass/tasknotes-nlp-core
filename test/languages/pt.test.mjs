@@ -1,0 +1,110 @@
+import { runExamples } from "./examples.mjs";
+
+// Reference date: Thursday 29 October 2026, 10:00.
+runExamples("pt", {
+	dates: [
+		["Ligar para a Joana amanhã às 15:00 #trabalho", { title: "Ligar para a Joana", tags: ["trabalho"], scheduled: { date: "2026-10-30", time: "15:00" } }],
+		["Enviar relatório até sexta-feira", { title: "Enviar relatório", due: { date: "2026-10-30" } }],
+		["Consulta agendada para amanhã às 14:00", { title: "Consulta", scheduled: { date: "2026-10-30", time: "14:00" } }],
+		["Reunião marcada para segunda-feira", { title: "Reunião", scheduled: { date: "2026-11-02" } }],
+		["Pagar renda no dia 5", { title: "Pagar renda", scheduled: { date: "2026-11-05" } }],
+		["Fechar contas até ao fim do mês", { title: "Fechar contas", due: { date: "2026-10-31" } }],
+		["Entregar proposta até fim da próxima semana", { title: "Entregar proposta", due: { date: "2026-11-08" } }],
+		["Arquivar recibos no fim do ano", { title: "Arquivar recibos", scheduled: { date: "2026-12-31" } }],
+		["Comprar presentes para o Natal", { title: "Comprar presentes", scheduled: { date: "2026-12-25" } }],
+		["Visitar família na véspera de Natal", { title: "Visitar família", scheduled: { date: "2026-12-24" } }],
+		["Levar flores em Finados", { title: "Levar flores", scheduled: { date: "2026-11-02" } }],
+		["Passear no Dia de Portugal", { title: "Passear", scheduled: { date: "2027-06-10" } }],
+		["Descansar no Dia da Liberdade", { title: "Descansar", scheduled: { date: "2027-04-25" } }],
+		["Almoçar no ano novo", { title: "Almoçar", scheduled: { date: "2027-01-01" } }],
+		["Reunião às quinze e um quarto", { title: "Reunião", scheduled: { date: "2026-10-29", time: "15:15" } }],
+		["Buscar crianças às dezasseis e meia", { title: "Buscar crianças", scheduled: { date: "2026-10-29", time: "16:30" } }],
+		["Telefonar às dezessete menos um quarto", { title: "Telefonar", scheduled: { date: "2026-10-29", time: "16:45" } }],
+		["Ligar depois de amanhã", { title: "Ligar", scheduled: { date: "2026-10-31" } }],
+		["Ligar daqui a 2 horas", { title: "Ligar", scheduled: { date: "2026-10-29", time: "12:00" } }],
+		["Buscar crianças amanhã às dezesseis e meia", { title: "Buscar crianças", scheduled: { date: "2026-10-30", time: "16:30" } }],
+		["Ligar depois de amanha", { title: "Ligar", scheduled: { date: "2026-10-31" } }],
+		["Rever notas anteontem", { title: "Rever notas", scheduled: { date: "2026-10-27" } }],
+		["Fechar contas até ao fim da semana", { title: "Fechar contas", due: { date: "2026-11-01" } }],
+		["Almoçar ao meio-dia", { title: "Almoçar", scheduled: { date: "2026-10-29", time: "12:00" } }],
+		["Ligar amanhã à meia-noite", { title: "Ligar", scheduled: { date: "2026-10-30", time: "00:00" } }],
+		["Almoçar amanhã ao meio-dia", { title: "Almoçar", scheduled: { date: "2026-10-30", time: "12:00" } }],
+		["Telefonar dentro de meia hora", { title: "Telefonar", scheduled: { date: "2026-10-29", time: "10:30" } }],
+		["Voltar em 15 minutos", { title: "Voltar", scheduled: { date: "2026-10-29", time: "10:15" } }],
+		["Ligar após duas horas", { title: "Ligar", scheduled: { date: "2026-10-29", time: "12:00" } }],
+		["Telefonar daqui a uma hora e meia", { title: "Telefonar", scheduled: { date: "2026-10-29", time: "11:30" } }],
+		["Entregar proposta prazo para amanhã", { title: "Entregar proposta", due: { date: "2026-10-30" } }],
+		["Ligar amanhã às 15:30", { title: "Ligar", scheduled: { date: "2026-10-30", time: "15:30" } }],
+	],
+	recurrence: [
+		["Regar plantas todos os dias", { title: "Regar plantas", recurrence: "FREQ=DAILY" }],
+		["Tomar vitaminas diariamente", { title: "Tomar vitaminas", recurrence: "FREQ=DAILY" }],
+		["Ginásio todas as segundas-feiras", { title: "Ginásio", recurrence: "FREQ=WEEKLY;BYDAY=MO" }],
+		["Treinar toda seg, qua e sex", { title: "Treinar", recurrence: "FREQ=WEEKLY;BYDAY=MO,WE,FR" }],
+		["Correr às terças e quintas", { title: "Correr", recurrence: "FREQ=WEEKLY;BYDAY=TU,TH" }],
+		["Trabalhar todos os dias úteis", { title: "Trabalhar", recurrence: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR" }],
+		["Reunião todos os dias úteis às 09:00", { title: "Reunião", scheduled: { date: "2026-10-30", time: "09:00" }, recurrence: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR" }],
+		["Passear todos os fins de semana", { title: "Passear", recurrence: "FREQ=WEEKLY;BYDAY=SA,SU" }],
+		["Rever contas a cada 2 semanas às terças", { title: "Rever contas", recurrence: "FREQ=WEEKLY;INTERVAL=2;BYDAY=TU" }],
+		["Pagar aluguel todo mês", { title: "Pagar aluguel", recurrence: "FREQ=MONTHLY" }],
+		["Renovar seguro todos os anos", { title: "Renovar seguro", recurrence: "FREQ=YEARLY" }],
+		["Enviar resumo toda primeira segunda-feira", { title: "Enviar resumo", recurrence: "FREQ=MONTHLY;BYDAY=MO;BYSETPOS=1" }],
+		["Fazer balanço toda última sexta-feira", { title: "Fazer balanço", recurrence: "FREQ=MONTHLY;BYDAY=FR;BYSETPOS=-1" }],
+		["Faturar quinzenalmente", { title: "Faturar", recurrence: "FREQ=DAILY;INTERVAL=15" }],
+		["Rever metas trimestralmente", { title: "Rever metas", recurrence: "FREQ=MONTHLY;INTERVAL=3" }],
+		["Limpar filtros de duas em duas semanas", { title: "Limpar filtros", recurrence: "FREQ=WEEKLY;INTERVAL=2" }],
+		["Alongar diariamente até sexta-feira", { title: "Alongar", recurrence: "FREQ=DAILY;UNTIL=20261030" }],
+		["Fisioterapia semanalmente por 6 vezes", { title: "Fisioterapia", recurrence: "FREQ=WEEKLY;COUNT=6" }],
+		["Reunião semanal", { title: "Reunião semanal", recurrence: "FREQ=WEEKLY" }],
+		["Faturação quinzenal", { title: "Faturação quinzenal", recurrence: "FREQ=DAILY;INTERVAL=15" }],
+		["Enviar resumo toda primeira segunda-feira do mês", { title: "Enviar resumo", recurrence: "FREQ=MONTHLY;BYDAY=MO;BYSETPOS=1" }],
+		["Enviar resumo toda última sexta-feira de cada mês", { title: "Enviar resumo", recurrence: "FREQ=MONTHLY;BYDAY=FR;BYSETPOS=-1" }],
+	],
+	estimates: [
+		["Escrever artigo 2h", { title: "Escrever artigo", estimate: 120 }],
+		["Rever contrato 1,5 horas", { title: "Rever contrato", estimate: 90 }],
+		["Estudar 1h30min", { title: "Estudar", estimate: 90 }],
+		["Caminhar durante meia hora", { title: "Caminhar", estimate: 30 }],
+		["Meditar por um quarto de hora", { title: "Meditar", estimate: 15 }],
+		["Preparar aula uma hora e meia", { title: "Preparar aula", estimate: 90 }],
+		["Responder ao Rui leva 10 minutos", { title: "Responder ao Rui", estimate: 10 }],
+		["Organizar mesa cerca de 20 min", { title: "Organizar mesa", estimate: 20 }],
+	],
+	keywords: [
+		["urgente: corrigir erro", { title: "corrigir erro", priority: "urgent" }],
+		["Consertar torneira prioridade alta", { title: "Consertar torneira", priority: "high" }],
+		["Rever texto prioridade: média", { title: "Rever texto", priority: "normal" }],
+		["Arrumar gaveta baixa prioridade", { title: "Arrumar gaveta", priority: "low" }],
+		["Comprar leite por fazer", { title: "Comprar leite", status: "open" }],
+		["Revisão em curso", { title: "Revisão", status: "in-progress" }],
+		["Inscrição concluída", { title: "Inscrição", status: "done" }],
+		["Reserva cancelada", { title: "Reserva", status: "cancelled" }],
+		["Aprovação a aguardar", { title: "Aprovação", status: "waiting" }],
+	],
+	"plain titles": [
+		["Comprar um planeador semanal", { title: "Comprar um planeador semanal" }],
+		["Comprar uma agenda mensal", { title: "Comprar uma agenda mensal" }],
+		["Comprar um relatório anual", { title: "Comprar um relatório anual" }],
+		["Rever a segunda edição", { title: "Rever a segunda edição" }],
+		["Rever o dia 150", { title: "Rever o dia 150" }],
+		["Comprar um diário", { title: "Comprar um diário" }],
+		["Ler em voz alta", { title: "Ler em voz alta" }],
+		["Trocar a bateria baixa", { title: "Trocar a bateria baixa" }],
+		["Rever a quarta edição", { title: "Rever a quarta edição" }],
+		["Visitar a quinta da família", { title: "Visitar a quinta da família" }],
+		["Medir 2 metros de tecido", { title: "Medir 2 metros de tecido" }],
+		["Repor estoque normal", { title: "Repor estoque normal" }],
+		["Conversar com o Dom Pedro", { title: "Conversar com o Dom Pedro" }],
+	],
+});
+
+// Engine gaps: expected/actual use the same compact task format as runExamples.
+// Input: "Pedir segunda via"
+// Expected: { title: "Pedir segunda via" }
+// Actual: { title: "Pedir via", scheduled: { date: "2026-11-02" } }
+// Input: "Comprar uma hora extra de estacionamento"
+// Expected: { title: "Comprar uma hora extra de estacionamento" }
+// Actual: { title: "Comprar extra de estacionamento", estimate: 60 }
+// Input: "Reunião amanhã às 15h30"
+// Expected: { title: "Reunião", scheduled: { date: "2026-10-30", time: "15:30" } }
+// Actual: { title: "Reunião às 15h30", scheduled: { date: "2026-10-30" } }

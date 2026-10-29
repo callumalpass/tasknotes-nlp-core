@@ -18,13 +18,79 @@ npm install tasknotes-nlp-core
 
 ## What This Package Provides
 
-- `NaturalLanguageParserCore`: main parser engine
+- `createTaskParser`: the parser API. It returns a typed task and the spans where each value was found.
+- `NaturalLanguageParserCore`: the TaskNotes plugin's interface, kept for compatibility
 - `TriggerConfigService`: helper for trigger/property mapping
 - Built-in defaults via `DEFAULT_NLP_TRIGGERS`
-- Language registry and helpers (`getAvailableLanguages`, `getLanguageConfig`, `detectSystemLanguage`)
+- Language registry and helpers (`getAvailableLanguages`, `getLanguageConfig`, `mergeLanguageConfig`, `detectSystemLanguage`)
 - Shared types for status/priority/trigger/user-field config
 
-## Quick Start
+## Parsing a task
+
+```ts
+import { createTaskParser } from "tasknotes-nlp-core";
+
+const parser = createTaskParser({
+  language: "en-GB",
+  statuses: [
+    { value: "open", label: "Open" },
+    { value: "in-progress", label: "In progress", aliases: ["doing", "wip"] },
+    { value: "done", label: "Done", completed: true },
+  ],
+  priorities: [{ value: "high", label: "High", aliases: ["p1"] }],
+  fields: [{ id: "points", trigger: "pts:", type: "number" }],
+});
+
+const { task, spans } = parser.parse("Standup every weekday at 9am #team pts:2 *in progress*");
+```
+
+`task` is:
+
+```ts
+{
+  title: "Standup",
+  scheduled: { date: "2026-10-30", time: "09:00" },
+  recurrence: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  status: "in-progress",
+  completed: false,
+  tags: ["team"],
+  contexts: [],
+  projects: [],
+  fields: { points: 2 },
+}
+```
+
+`spans` lists each recognised value with its offsets in the input, in input order, so an editor can highlight them:
+
+```ts
+[
+  { kind: "recurrence", start: 8, end: 21, text: "every weekday" },
+  { kind: "scheduled", start: 22, end: 28, text: "at 9am" },
+  { kind: "tag", start: 29, end: 34, text: "#team" },
+  { kind: "field", field: "points", start: 35, end: 40, text: "pts:2" },
+  { kind: "status", start: 41, end: 54, text: "*in progress*" },
+]
+```
+
+A span with `inTitle: true` set a value but its text stayed in the title, as in `prep slides for monday's meeting` or `weekly review`. A date range sets a `scheduled` and a `due` span over the same text.
+
+### Options
+
+| Option | Default | |
+| --- | --- | --- |
+| `language` | `"en"` | Language code or locale (`de`, `en-GB`). The region sets the numeric date order. |
+| `locale`, `dateOrder` | from `language` | Override numeric date reading (`day-first` or `month-first`). |
+| `referenceDate` | now | Date or function giving the date relative dates resolve against. `parse(input, { referenceDate })` overrides it for one parse. |
+| `defaultDateField` | `"scheduled"` | Field for a date without a due or scheduled word. |
+| `statuses`, `priorities` | language words | Values with `label` and `aliases`. Without any, the language's built-in words apply (`done`, `urgent` and so on). |
+| `triggers` | `#` `@` `+` `*` | Trigger characters for `tag`, `context`, `project`, `status` and `priority`; `false` turns one off. A status can be wrapped, `*in progress*`, to end a multi-word name. |
+| `fields` | none | Custom fields: `{ id, trigger, type }` with type `text`, `number`, `boolean`, `date` or `list`. Values are typed: numbers, booleans, `YYYY-MM-DD` dates (from `next friday` too) and lists. Quoted values (`assignee:"Jo Bloggs"`), wikilinks and markdown links are kept whole. |
+| `features` | all on | Turn off `dates`, `recurrence`, `estimate`, `priority` or `status`. |
+| `languageOverrides` | none | Additions to the language: arrays are appended, objects merged. For example `{ dateTriggers: { due: ["deadline:"] } }`. |
+
+An input with nothing left for a title gives an empty `title`. `NaturalLanguageParserCore` uses `Untitled Task` instead.
+
+## NaturalLanguageParserCore
 
 ```ts
 import {
@@ -77,6 +143,8 @@ const parsed = parser.parseInput(
 console.log(parsed);
 ```
 
+`parseInputWithSpans()` returns `{ data, spans }`: the same data, plus the spans described under [Parsing a task](#parsing-a-task), for highlighting recognised text as the user types.
+
 ## Parsed Output Shape
 
 `parseInput()` returns:
@@ -125,6 +193,7 @@ new NaturalLanguageParserCore(
 - `userFields`: custom field definitions with trigger support.
 - `options.dateLocale`: locale used for ambiguous numeric dates, for example `en-GB` parses `11/06/2026` as `2026-06-11`.
 - `options.dateOrder`: explicit numeric date order override, either `day-first` or `month-first`.
+- `options.referenceDate`: the date relative phrases such as `tomorrow` resolve against, as a `Date` or a function returning one. Defaults to the current time at each parse.
 
 Quoted spans and backslash-prefixed literals are preserved as plain title text
 instead of being parsed as NLP syntax. For example, `"Today"` and `\tomorrow`
@@ -203,9 +272,46 @@ date. Bare words follow `defaultToScheduled`; `entro` and `per` set Due, while
 complete Italian Chrono locale. Only unprotected title text is date-parsed;
 `[[oggi]]`, `+[[domani]]`, `#domani`, `@oggi`, `\\oggi`, and details stay literal.
 
+## How Titles Are Built
+
+Each parsing stage claims the spans of the title line it uses: metadata, priority,
+status, recurrence, estimate, then dates. Later stages only read unclaimed text, and
+the title is what is left. Words that only introduced a removed value, set per
+language in `connectors`, go with it, as do separators left dangling:
+
+| Input | Title |
+|---|---|
+| `call Jo at 3pm` | `call Jo` |
+| `write post, should take about 2 hours` | `write post` |
+| `high priority deploy the hotfix` | `deploy the hotfix` |
+| `pay rent every month on the 1st` | `pay rent` |
+
+A possessive date sets the date but stays in the title: `prep slides for monday's meeting`.
+
+## English Dates
+
+Beyond chrono's English parser, these are recognised:
+
+- `half past four`, `quarter to 5`, `4 o'clock`
+- `the 15th`, the next 15th of a month, when it ends the phrase or comes before a time
+  (`review the 2nd draft` stays a title)
+- `end of the day`, `end of the week` (Friday), `end of next month`, `eod`, `eow`, `eom`, `eoy`
+- `christmas`, `christmas eve`, `new year's eve`, `new year's day`, `halloween`
+- Bare hours from 1 to 6 mean the afternoon: `at 3` is 15:00. `03:30` and `3am` are kept.
+- `Sun`, `Sat` and `Wed` are not weekdays after `the`, `a`, `with`, `of`, `in` or `from`,
+  or when capitalised before another capitalised word (`Sun Ltd`).
+- A due trigger may be followed by connector words: `due before friday`. `before` and
+  `no later than` are due triggers.
+- `in`, `within` and `after` make a duration a relative date: `call back in 2 hours`
+  schedules a time instead of setting an estimate.
+
 ## Recurrence Output
 
 Recurrence phrases are parsed into RRULE strings (for example `FREQ=WEEKLY;BYDAY=MO`).
+
+English also supports weekday lists (`every mon, wed and fri`, `tuesdays and thursdays`)
+and groups (`every weekday`, `weekends`). When the only date given is a time, as in
+`call mum every sunday at 6pm`, the date is moved to the next recurring day.
 
 For display, you can convert RRULE text with `rrule` or use parser preview helpers:
 

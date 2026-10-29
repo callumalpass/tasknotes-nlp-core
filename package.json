@@ -1,6 +1,6 @@
 {
   "name": "tasknotes-nlp-core",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Shared natural language parsing core for TaskNotes",
   "repository": {
     "type": "git",
@@ -29,7 +29,7 @@
     "build:esm": "tsc -p tsconfig.json",
     "build:cjs": "tsc -p tsconfig.cjs.json && node scripts/write-cjs-package.mjs",
     "clean": "rm -rf dist dist-cjs",
-    "test": "npm run build && node --test test/*.test.mjs",
+    "test": "npm run build && node --test test/*.test.mjs test/languages/*.test.mjs",
     "prepare": "npm run build",
     "prepublishOnly": "npm run clean && npm run build",
     "release:patch": "npm version patch && git push origin main --follow-tags",

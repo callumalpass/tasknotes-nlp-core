@@ -52,7 +52,7 @@ describe("tasknotes#2428 Italian date expressions", () => {
 		for (const suffix of ["", ","]) {
 			it(`ogni ${weekday}${suffix}`, () => {
 				const result = parser().parseInput(`${title} ogni ${weekday}${suffix}`);
-				assert.equal(result.title, `${title}${suffix ? ` ${suffix}` : ""}`);
+				assert.equal(result.title, title);
 				assert.equal(result.recurrence, `FREQ=WEEKLY;BYDAY=${code}`);
 			});
 		}

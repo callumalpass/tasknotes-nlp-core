@@ -1842,6 +1842,9 @@ export class TaskParserEngine {
 			// "weekly review" names the task: keep the word in the title. After an
 			// article, as in "buy a weekly planner", it is not a recurrence at all.
 			const after = this.languageConfig.recurrence.adjectivePosition === "after";
+			// Where adjectives follow their noun, an article right before the word
+			// makes it a noun: "pagar a diária do hotel".
+			if (pattern.adjective && after && this.followsNonDateWord(view.text.slice(0, start))) continue;
 			const isAdjective =
 				pattern.adjective &&
 				rule === pattern.handler(match) &&

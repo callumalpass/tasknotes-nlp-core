@@ -21,8 +21,8 @@ export const ptConfig: NLPLanguageConfig = {
 
 	recurrence: {
 		frequencies: {
-			// "diário" is also a journal; prefer unambiguous daily commands.
-			daily: ["diariamente", "todos os dias", "todo dia", "cada dia", "a cada dia"],
+			// "diário" is also a journal; "diária" is kept as an adjective only.
+			daily: ["diariamente", "diária", "todos os dias", "todo dia", "cada dia", "a cada dia"],
 			weekly: ["semanalmente", "semanal", "toda semana", "toda a semana", "todas as semanas", "cada semana"],
 			monthly: ["mensalmente", "mensal", "todo mês", "todo o mês", "todos os meses", "cada mês"],
 			yearly: ["anualmente", "anual", "todo ano", "todo o ano", "todos os anos", "cada ano"],
@@ -76,7 +76,7 @@ export const ptConfig: NLPLanguageConfig = {
 			{ phrase: "semestralmente", rule: "FREQ=MONTHLY;INTERVAL=6" },
 			{ phrase: "semestral", rule: "FREQ=MONTHLY;INTERVAL=6" },
 		],
-		adjectives: ["semanal", "mensal", "anual", "quinzenal", "bimestral", "trimestral", "semestral"],
+		adjectives: ["diária", "semanal", "mensal", "anual", "quinzenal", "bimestral", "trimestral", "semestral"],
 		adjectivePosition: "after",
 		ordinalSuffixes: ["do mês", "de cada mês"],
 		until: ["até", "até ao", "até o", "até à", "até a"],

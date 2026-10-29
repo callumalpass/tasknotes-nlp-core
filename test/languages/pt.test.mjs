@@ -39,6 +39,7 @@ runExamples("pt", {
 	recurrence: [
 		["Regar plantas todos os dias", { title: "Regar plantas", recurrence: "FREQ=DAILY" }],
 		["Tomar vitaminas diariamente", { title: "Tomar vitaminas", recurrence: "FREQ=DAILY" }],
+		["Reunião diária com a equipe", { title: "Reunião diária com a equipe", recurrence: "FREQ=DAILY" }],
 		["Ginásio todas as segundas-feiras", { title: "Ginásio", recurrence: "FREQ=WEEKLY;BYDAY=MO" }],
 		["Treinar toda seg, qua e sex", { title: "Treinar", recurrence: "FREQ=WEEKLY;BYDAY=MO,WE,FR" }],
 		["Correr às terças e quintas", { title: "Correr", recurrence: "FREQ=WEEKLY;BYDAY=TU,TH" }],
@@ -88,6 +89,7 @@ runExamples("pt", {
 		["Rever a segunda edição", { title: "Rever a segunda edição" }],
 		["Rever o dia 150", { title: "Rever o dia 150" }],
 		["Comprar um diário", { title: "Comprar um diário" }],
+		["Pagar a diária do hotel", { title: "Pagar a diária do hotel" }],
 		["Ler em voz alta", { title: "Ler em voz alta" }],
 		["Trocar a bateria baixa", { title: "Trocar a bateria baixa" }],
 		["Rever a quarta edição", { title: "Rever a quarta edição" }],

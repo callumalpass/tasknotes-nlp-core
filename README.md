@@ -207,11 +207,15 @@ checked against original input positions: removing `@work` from
 `Task @work+project` does not make `+project` a selector. `task@work`, `(@work)`,
 email addresses, URL fragments and `C++programming` stay literal under these
 selector rules. Status/priority phrase fallback and date parsing are unchanged
-by this boundary contract; this is not a universal URL/code shield.
+by this boundary contract.
 
-Only the first line is parsed; subsequent lines are details. Wikilinks, quoted
-spans (double quotes, single quotes or backticks), and escaped tokens are
-protected before extraction, including nested quoted wikilinks.
+Only the first line is parsed; subsequent lines are details. Wikilinks
+(`[[2026-11-03 Meeting]]`), markdown links (`[notes](2026-11-03.md)`), bare
+URLs, quoted spans (double quotes, single quotes or backticks), and escaped
+tokens are protected before extraction, including nested quoted wikilinks. Text
+inside a link stays in the title as written and is never read as a date, tag,
+context or other value; a trigger directly before a link, as in `+[[project]]`,
+still applies to the whole link.
 
 A repeated project prefix removes exactly one configured prefix:
 `++personal` produces project `+personal`, and `::::personal` with prefix `::`

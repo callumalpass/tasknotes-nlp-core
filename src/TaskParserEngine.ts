@@ -119,6 +119,11 @@ interface PhraseMatch {
 type SpanRecorder = (start: number, end: number, kind: EngineSpanKind, field?: string) => void;
 
 const LITERAL_PLACEHOLDER = (index: number) => `__TASKNOTES_NLP_LITERAL_${index}__`;
+// [label](target), [label](<target with spaces>) and an optional "title".
+const MARKDOWN_LINK_PATTERN =
+	/\[[^[\]\n]*\]\((?:<[^<>\n]*>|[^()\s]*(?:\([^()\s]*\)[^()\s]*)*)(?:\s+"[^"\n]*")?\)/y;
+// Trailing punctuation usually ends the sentence, not the URL.
+const BARE_URL_PATTERN = /[a-z][a-z0-9+.-]*:\/\/[^\s<>]*[^\s<>.,;:!?'")\]]/iy;
 
 /**
  * Parses one task line into structured data. Each stage claims the text it uses
@@ -422,30 +427,54 @@ export class TaskParserEngine {
 	}
 
 	private protectNlpLiterals(input: string, literals: string[]): MappedText {
-		const structured = this.protectObsidianLinks(MappedText.from(input), literals);
+		const structured = this.protectLinks(MappedText.from(input), literals);
 		const quoted = this.protectQuotedLiterals(structured, literals);
 		return this.protectEscapedLiterals(quoted, literals);
 	}
 
-	private protectObsidianLinks(input: MappedText, literals: string[]): MappedText {
+	/**
+	 * Protects wikilinks, markdown links and bare URLs so text inside a link, such
+	 * as the date in [[2026-11-03 Meeting]], is kept whole and never parsed.
+	 */
+	private protectLinks(input: MappedText, literals: string[]): MappedText {
 		const source = input.text;
 		const output = new MappedText();
 		let index = 0;
 
 		while (index < source.length) {
-			const endIndex = source.startsWith("[[", index) ? source.indexOf("]]", index + 2) : -1;
+			const endIndex = this.findLinkEnd(source, index);
 			if (endIndex === -1) {
 				output.appendFrom(input, index, index + 1);
 				index += 1;
 				continue;
 			}
 
-			const literal = source.slice(index, endIndex + 2);
-			output.appendReplacing(input, index, endIndex + 2, this.protectLiteral(literal, literals));
-			index = endIndex + 2;
+			const literal = source.slice(index, endIndex);
+			output.appendReplacing(input, index, endIndex, this.protectLiteral(literal, literals));
+			index = endIndex;
 		}
 
 		return output;
+	}
+
+	/** End of the link starting at index, or -1 when no link starts there. */
+	private findLinkEnd(source: string, index: number): number {
+		if (source.startsWith("[[", index)) {
+			const close = source.indexOf("]]", index + 2);
+			return close === -1 ? -1 : close + 2;
+		}
+
+		if (source[index] === "[") {
+			MARKDOWN_LINK_PATTERN.lastIndex = index;
+			const match = MARKDOWN_LINK_PATTERN.exec(source);
+			return match ? index + match[0].length : -1;
+		}
+
+		// Only ASCII word characters: CJK text can run straight into a URL.
+		if (index > 0 && /[A-Za-z0-9_]/.test(source[index - 1])) return -1;
+		BARE_URL_PATTERN.lastIndex = index;
+		const match = BARE_URL_PATTERN.exec(source);
+		return match ? index + match[0].length : -1;
 	}
 
 	private protectQuotedLiterals(input: MappedText, literals: string[]): MappedText {
